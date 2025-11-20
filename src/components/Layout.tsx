@@ -19,6 +19,7 @@ import {
   Globe,
   Truck,
 } from 'lucide-react';
+import logo from '../assets/Untitled-1.svg';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -68,9 +69,7 @@ export function Layout({ children }: LayoutProps) {
       >
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-md">
-              <Package className="w-6 h-6 text-white" />
-            </div>
+            <img src={logo} alt="Logo" className="h-10 w-10" />
             <div className="flex flex-col leading-tight">
               <span className="text-sm font-bold text-gray-900">PT. SHUBHAM ANZEN</span>
               <span className="text-sm font-bold text-gray-900">PHARMA JAYA</span>

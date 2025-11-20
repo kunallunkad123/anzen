@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { LogIn, Package } from 'lucide-react';
+import { LogIn } from 'lucide-react';
+import logo from '../assets/Untitled-1.svg';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -30,9 +31,7 @@ export function Login() {
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-8">
         <div className="flex flex-col items-center mb-8">
           <div className="mb-4">
-            <div className="h-24 w-24 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg mx-auto">
-              <Package className="w-14 h-14 text-white" />
-            </div>
+            <img src={logo} alt="Company Logo" className="h-24 w-24 mx-auto" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 text-center">
             PT. SHUBHAM ANZEN
