@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { Plus, Edit, Trash2, DollarSign, TrendingUp, TrendingDown, CreditCard, Receipt, Paperclip } from 'lucide-react';
 import { BankAccountsManager } from '../components/finance/BankAccountsManager';
 import { ReceivablesManager } from '../components/finance/ReceivablesManager';
+import { PayablesManager } from '../components/finance/PayablesManager';
 import { FileUpload } from '../components/FileUpload';
 
 interface FinanceExpense {
@@ -530,12 +531,7 @@ export function Finance() {
             )}
 
             {activeTab === 'payables' && (
-              <div className="text-center py-12 text-gray-500">
-                <TrendingDown className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                <p className="text-lg font-medium">Accounts Payable</p>
-                <p className="text-sm mt-2">Manage vendor bills and payments</p>
-                <p className="text-xs mt-4 text-gray-400">Feature in development...</p>
-              </div>
+              <PayablesManager canManage={canManage} />
             )}
           </div>
         </div>
