@@ -5,8 +5,7 @@ import { Modal } from '../components/Modal';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, Edit, Trash2, DollarSign, TrendingUp, TrendingDown, CreditCard, Receipt } from 'lucide-react';
-import { BankAccountsManager } from '../components/finance/BankAccountsManager';
+import { Plus, Edit, Trash2, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
 
 interface FinanceExpense {
   id: string;
@@ -26,12 +25,9 @@ interface Batch {
   batch_number: string;
 }
 
-type FinanceTab = 'expenses' | 'banks' | 'receivables' | 'payables';
-
 export function Finance() {
   const { t } = useLanguage();
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<FinanceTab>('expenses');
   const [expenses, setExpenses] = useState<FinanceExpense[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,67 +228,29 @@ export function Finance() {
 
   const canManage = profile?.role === 'admin' || profile?.role === 'accounts';
 
-  const tabs: { id: FinanceTab; label: string; icon: any }[] = [
-    { id: 'expenses', label: 'Expenses', icon: Receipt },
-    { id: 'banks', label: 'Bank Accounts', icon: CreditCard },
-    { id: 'receivables', label: 'Receivables', icon: TrendingUp },
-    { id: 'payables', label: 'Payables', icon: TrendingDown },
-  ];
-
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Finance Management</h1>
-            <p className="text-gray-600 mt-1">Comprehensive financial tracking and reporting</p>
+            <h1 className="text-3xl font-bold text-gray-900">Finance & Expenses</h1>
+            <p className="text-gray-600 mt-1">Track operational expenses and financial overview</p>
           </div>
+          {canManage && (
+            <button
+              onClick={() => {
+                resetForm();
+                setModalOpen(true);
+              }}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+            >
+              <Plus className="w-5 h-5" />
+              Add Expense
+            </button>
+          )}
         </div>
 
-        <div className="bg-white rounded-lg shadow">
-          <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6" aria-label="Tabs">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={[
-                      'flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm',
-                      isActive
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    ].join(' ')}
-                  >
-                    <Icon className="w-5 h-5" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="p-6">
-            {activeTab === 'expenses' && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  {canManage && (
-                    <button
-                      onClick={() => {
-                        resetForm();
-                        setModalOpen(true);
-                      }}
-                      className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition ml-auto"
-                    >
-                      <Plus className="w-5 h-5" />
-                      Add Expense
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow p-6 text-white">
             <div className="flex items-center justify-between">
               <div>
@@ -498,32 +456,6 @@ export function Finance() {
             </div>
           </form>
         </Modal>
-              </div>
-            )}
-
-            {activeTab === 'banks' && (
-              <BankAccountsManager canManage={canManage} />
-            )}
-
-            {activeTab === 'receivables' && (
-              <div className="text-center py-12 text-gray-500">
-                <TrendingUp className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                <p className="text-lg font-medium">Accounts Receivable</p>
-                <p className="text-sm mt-2">Track customer payments against invoices</p>
-                <p className="text-xs mt-4 text-gray-400">Feature in development...</p>
-              </div>
-            )}
-
-            {activeTab === 'payables' && (
-              <div className="text-center py-12 text-gray-500">
-                <TrendingDown className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                <p className="text-lg font-medium">Accounts Payable</p>
-                <p className="text-sm mt-2">Manage vendor bills and payments</p>
-                <p className="text-xs mt-4 text-gray-400">Feature in development...</p>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </Layout>
   );
