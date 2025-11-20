@@ -4,7 +4,8 @@ import { Modal } from '../components/Modal';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, Edit, Trash2, Phone, Mail, MessageSquare, Calendar, CheckCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Phone, Mail, MessageSquare, Calendar, CheckCircle, FileText, AlertCircle, TrendingUp, Star, Users } from 'lucide-react';
+import { QuotationManager } from '../components/crm/QuotationManager';
 
 interface CRMLead {
   id: string;
@@ -13,12 +14,18 @@ interface CRMLead {
   email: string;
   phone: string;
   product_interest: string;
-  estimated_quantity: number;
-  source: string;
+  quantity_interest: string;
+  lead_source: string;
   status: 'inquiry' | 'quotation' | 'negotiation' | 'won' | 'lost';
   assigned_to: string;
   expected_close_date: string | null;
+  estimated_value: number | null;
   notes: string | null;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  next_follow_up: string | null;
+  lead_score: number;
+  tags: string[] | null;
+  deal_value: number;
   created_at: string;
   user_profiles?: {
     full_name: string;
@@ -48,16 +55,20 @@ export function CRM() {
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<CRMLead | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'details' | 'quotations'>('details');
   const [formData, setFormData] = useState({
     company_name: '',
     contact_person: '',
     email: '',
     phone: '',
     product_interest: '',
-    estimated_quantity: 0,
-    source: '',
+    quantity_interest: '',
+    lead_source: '',
     status: 'inquiry' as CRMLead['status'],
+    priority: 'medium' as CRMLead['priority'],
     expected_close_date: '',
+    deal_value: 0,
+    lead_score: 50,
     notes: '',
   });
   const [activityFormData, setActivityFormData] = useState({
@@ -184,10 +195,13 @@ export function CRM() {
       email: lead.email,
       phone: lead.phone,
       product_interest: lead.product_interest,
-      estimated_quantity: lead.estimated_quantity,
-      source: lead.source,
+      quantity_interest: lead.quantity_interest || '',
+      lead_source: lead.lead_source || '',
       status: lead.status,
+      priority: lead.priority || 'medium',
       expected_close_date: lead.expected_close_date || '',
+      deal_value: lead.deal_value || 0,
+      lead_score: lead.lead_score || 50,
       notes: lead.notes || '',
     });
     setModalOpen(true);
@@ -237,10 +251,13 @@ export function CRM() {
       email: '',
       phone: '',
       product_interest: '',
-      estimated_quantity: 0,
-      source: '',
+      quantity_interest: '',
+      lead_source: '',
       status: 'inquiry',
+      priority: 'medium',
       expected_close_date: '',
+      deal_value: 0,
+      lead_score: 50,
       notes: '',
     });
   };
@@ -412,73 +429,131 @@ export function CRM() {
           </div>
 
           <div className="bg-white rounded-lg shadow">
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
-                {selectedLead ? 'Lead Details & Activities' : 'Select a Lead'}
-              </h2>
-              {selectedLead && canManage && (
-                <div className="flex gap-2">
+            <div className="border-b border-gray-200">
+              <div className="flex items-center justify-between p-4">
+                <h2 className="text-lg font-semibold">
+                  {selectedLead ? selectedLead.company_name : 'Select a Lead'}
+                </h2>
+                {selectedLead && canManage && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setActivityFormData({
+                          activity_type: 'note',
+                          subject: '',
+                          description: '',
+                          follow_up_date: '',
+                        });
+                        setActivityModalOpen(true);
+                      }}
+                      className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition text-sm"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Quick Note
+                    </button>
+                    <button
+                      onClick={() => setActivityModalOpen(true)}
+                      className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Activity
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {selectedLead && (
+                <div className="flex px-4">
                   <button
-                    onClick={() => {
-                      setActivityFormData({
-                        activity_type: 'note',
-                        subject: '',
-                        description: '',
-                        follow_up_date: '',
-                      });
-                      setActivityModalOpen(true);
-                    }}
-                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition text-sm"
+                    onClick={() => setActiveTab('details')}
+                    className={`px-4 py-2 border-b-2 transition ${
+                      activeTab === 'details'
+                        ? 'border-blue-500 text-blue-600 font-medium'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
                   >
-                    <MessageSquare className="w-4 h-4" />
-                    Quick Note
+                    Details & Activities
                   </button>
                   <button
-                    onClick={() => setActivityModalOpen(true)}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition text-sm"
+                    onClick={() => setActiveTab('quotations')}
+                    className={`px-4 py-2 border-b-2 transition ${
+                      activeTab === 'quotations'
+                        ? 'border-blue-500 text-blue-600 font-medium'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
                   >
-                    <Plus className="w-4 h-4" />
-                    Add Activity
+                    <FileText className="w-4 h-4 inline mr-1" />
+                    Quotations
                   </button>
                 </div>
               )}
             </div>
+
             <div className="p-4 max-h-[600px] overflow-y-auto">
               {selectedLead ? (
-                <div className="space-y-6">
-                  <div className="space-y-3">
-                    <div>
-                      <span className="text-sm text-gray-600">Contact Person:</span>
-                      <p className="font-medium">{selectedLead.contact_person}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <span className="text-sm text-gray-600">Email:</span>
-                        <p className="font-medium text-sm">{selectedLead.email}</p>
+                <>
+                  {activeTab === 'details' ? (
+                    <div className="space-y-6">
+                      <div className="space-y-3">
+                        <div>
+                          <span className="text-sm text-gray-600">Contact Person:</span>
+                          <p className="font-medium">{selectedLead.contact_person}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <span className="text-sm text-gray-600">Email:</span>
+                            <p className="font-medium text-sm">{selectedLead.email}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Phone:</span>
+                            <p className="font-medium text-sm">{selectedLead.phone}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-sm text-gray-600">Product Interest:</span>
+                          <p className="font-medium">{selectedLead.product_interest}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <span className="text-sm text-gray-600">Priority:</span>
+                            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ml-2 ${
+                              selectedLead.priority === 'urgent' ? 'bg-red-100 text-red-800' :
+                              selectedLead.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                              selectedLead.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {selectedLead.priority?.toUpperCase() || 'MEDIUM'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Lead Score:</span>
+                            <span className="font-medium ml-2">{selectedLead.lead_score || 50}/100</span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-sm text-gray-600">Deal Value:</span>
+                          <p className="font-semibold text-blue-600">
+                            Rp {(selectedLead.deal_value || 0).toLocaleString('id-ID')}
+                          </p>
+                        </div>
+                        {selectedLead.next_follow_up && (
+                          <div>
+                            <span className="text-sm text-gray-600">Next Follow-up:</span>
+                            <p className="font-medium text-blue-600">
+                              {new Date(selectedLead.next_follow_up).toLocaleString()}
+                            </p>
+                          </div>
+                        )}
+                        {selectedLead.notes && (
+                          <div>
+                            <span className="text-sm text-gray-600">Notes:</span>
+                            <p className="text-sm mt-1">{selectedLead.notes}</p>
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <span className="text-sm text-gray-600">Phone:</span>
-                        <p className="font-medium text-sm">{selectedLead.phone}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Product Interest:</span>
-                      <p className="font-medium">{selectedLead.product_interest}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Estimated Quantity:</span>
-                      <p className="font-medium">{selectedLead.estimated_quantity}</p>
-                    </div>
-                    {selectedLead.notes && (
-                      <div>
-                        <span className="text-sm text-gray-600">Notes:</span>
-                        <p className="text-sm mt-1">{selectedLead.notes}</p>
-                      </div>
-                    )}
-                  </div>
 
-                  <div className="border-t pt-4">
-                    <h3 className="font-semibold mb-3">Activities</h3>
+                      <div className="border-t pt-4">
+                        <h3 className="font-semibold mb-3">Activities</h3>
                     <div className="space-y-3">
                       {activities.length === 0 ? (
                         <p className="text-sm text-gray-500 text-center py-4">No activities yet</p>
@@ -527,7 +602,14 @@ export function CRM() {
                       )}
                     </div>
                   </div>
-                </div>
+                    </div>
+                  ) : (
+                    <QuotationManager
+                      leadId={selectedLead.id}
+                      canManage={canManage}
+                    />
+                  )}
+                </>
               ) : (
                 <div className="text-center text-gray-500 py-12">
                   <MessageSquare className="w-12 h-12 mx-auto text-gray-300 mb-3" />
@@ -616,29 +698,51 @@ export function CRM() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Estimated Quantity
+                  Quantity Interest
                 </label>
                 <input
-                  type="number"
-                  value={formData.estimated_quantity === 0 ? '' : formData.estimated_quantity}
-                  onChange={(e) => setFormData({ ...formData, estimated_quantity: e.target.value === '' ? 0 : Number(e.target.value) })}
+                  type="text"
+                  value={formData.quantity_interest}
+                  onChange={(e) => setFormData({ ...formData, quantity_interest: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  min="0"
-                  placeholder="0"
+                  placeholder="e.g., 500 kg"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Source
+                  Lead Source
                 </label>
-                <input
-                  type="text"
-                  value={formData.source}
-                  onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                <select
+                  value={formData.lead_source}
+                  onChange={(e) => setFormData({ ...formData, lead_source: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Website, Referral, Cold Call"
-                />
+                >
+                  <option value="">Select source</option>
+                  <option value="website">Website</option>
+                  <option value="referral">Referral</option>
+                  <option value="trade_show">Trade Show</option>
+                  <option value="cold_call">Cold Call</option>
+                  <option value="email">Email</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Priority *
+                </label>
+                <select
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
               </div>
 
               <div>
@@ -655,6 +759,34 @@ export function CRM() {
                     <option key={key} value={key}>{config.label}</option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Lead Score (0-100)
+                </label>
+                <input
+                  type="number"
+                  value={formData.lead_score}
+                  onChange={(e) => setFormData({ ...formData, lead_score: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  max="100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Deal Value (Rp)
+                </label>
+                <input
+                  type="number"
+                  value={formData.deal_value === 0 ? '' : formData.deal_value}
+                  onChange={(e) => setFormData({ ...formData, deal_value: e.target.value === '' ? 0 : Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  placeholder="0"
+                />
               </div>
 
               <div className="col-span-2">
