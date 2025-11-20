@@ -237,7 +237,6 @@ export function Sales() {
         .from('batches')
         .select('id, batch_number, product_id, current_stock, import_price, duty_charges, freight_charges, other_charges, import_quantity, import_date, expiry_date')
         .eq('is_active', true)
-        .gt('current_stock', 0)
         .order('import_date', { ascending: true });
 
       if (error) throw error;
@@ -1055,9 +1054,9 @@ export function Sales() {
                           </select>
                         </div>
 
-                        {item.product_id && availableBatches.length > 0 && (
+                        {item.product_id && (
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">Batch</label>
+                            <label className="block text-xs text-gray-600 mb-1">Batch (Optional)</label>
                             <select
                               value={item.batch_id || ''}
                               onChange={(e) => {
@@ -1067,11 +1066,16 @@ export function Sales() {
                               }}
                               className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                             >
-                              <option value="">Select</option>
+                              <option value="">No Batch</option>
                               {availableBatches.map((b) => (
-                                <option key={b.id} value={b.id}>{b.batch_number}</option>
+                                <option key={b.id} value={b.id}>
+                                  {b.batch_number} {b.current_stock === 0 ? '(0 stock)' : `(${b.current_stock} available)`}
+                                </option>
                               ))}
                             </select>
+                            {availableBatches.length === 0 && (
+                              <p className="text-xs text-amber-600 mt-1">No batches available for this product</p>
+                            )}
                           </div>
                         )}
 
