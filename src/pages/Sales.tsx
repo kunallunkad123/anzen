@@ -24,6 +24,7 @@ interface SalesInvoice {
   po_number: string | null;
   payment_terms_days: number | null;
   notes: string | null;
+  linked_challan_ids?: string[] | null;
   customers?: {
     company_name: string;
     gst_vat_type: string;
@@ -657,13 +658,13 @@ export function Sales() {
         }
       }
 
+      await loadInvoices();
+      await loadBatches();
       setModalOpen(false);
       resetForm();
-      loadInvoices();
-      loadBatches();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving invoice:', error);
-      alert('Failed to save invoice. Please try again.');
+      alert(`Failed to save invoice: ${error.message || 'Unknown error'}. Please check console for details.`);
     }
   };
 
