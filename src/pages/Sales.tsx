@@ -233,6 +233,7 @@ export function Sales() {
 
   const loadBatches = async () => {
     try {
+      // Load ALL batches for reference (including 0 stock for delivery challan invoices)
       const { data, error } = await supabase
         .from('batches')
         .select('id, batch_number, product_id, current_stock, import_price, duty_charges, freight_charges, other_charges, import_quantity, import_date, expiry_date')
@@ -1056,7 +1057,7 @@ export function Sales() {
 
                         {item.product_id && (
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">Batch (Optional)</label>
+                            <label className="block text-xs text-gray-600 mb-1">Batch</label>
                             <select
                               value={item.batch_id || ''}
                               onChange={(e) => {
@@ -1065,16 +1066,22 @@ export function Sales() {
                                 updateItemTotal(index, { ...item, batch_id: batchId, unit_price: suggested });
                               }}
                               className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                              disabled={selectedChallanId !== ''}
                             >
-                              <option value="">No Batch</option>
-                              {availableBatches.map((b) => (
-                                <option key={b.id} value={b.id}>
-                                  {b.batch_number} {b.current_stock === 0 ? '(0 stock)' : `(${b.current_stock} available)`}
-                                </option>
+                              <option value="">Select</option>
+                              {/* Show only batches with stock > 0 for manual selection */}
+                              {availableBatches.filter(b => b.current_stock > 0).map((b) => (
+                                <option key={b.id} value={b.id}>{b.batch_number} ({b.current_stock} available)</option>
                               ))}
+                              {/* Show selected batch even if stock is 0 (from delivery challan) */}
+                              {item.batch_id && availableBatches.find(b => b.id === item.batch_id && b.current_stock === 0) && (
+                                <option key={item.batch_id} value={item.batch_id}>
+                                  {availableBatches.find(b => b.id === item.batch_id)?.batch_number} (from challan)
+                                </option>
+                              )}
                             </select>
-                            {availableBatches.length === 0 && (
-                              <p className="text-xs text-amber-600 mt-1">No batches available for this product</p>
+                            {selectedChallanId && (
+                              <p className="text-xs text-blue-600 mt-1">Batch from delivery challan (locked)</p>
                             )}
                           </div>
                         )}
