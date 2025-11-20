@@ -518,56 +518,16 @@ export function Sales() {
         }
       }
 
-      // Pre-validate stock availability before saving anything
-      const isLinkedToChallan = selectedChallanId !== '';
-      if (!isLinkedToChallan) {
-        for (const item of items) {
-          if (item.batch_id) {
-            const { data: freshBatch, error: fetchError } = await supabase
-              .from('batches')
-              .select('current_stock, batch_number')
-              .eq('id', item.batch_id)
-              .single();
-
-            if (fetchError || !freshBatch) {
-              throw new Error(`Batch not found for validation`);
-            }
-
-            const newStock = freshBatch.current_stock - item.quantity;
-            if (newStock < 0) {
-              throw new Error(`Insufficient stock for batch "${freshBatch.batch_number}". Available: ${freshBatch.current_stock}, Required: ${item.quantity}`);
-            }
-          }
-        }
-      }
-
       let invoice;
 
       if (editingInvoice) {
-        const oldItems = await loadInvoiceItems(editingInvoice.id);
+        // Delete old items - the database trigger will automatically restore stock
+        const { error: deleteItemsError } = await supabase
+          .from('sales_invoice_items')
+          .delete()
+          .eq('invoice_id', editingInvoice.id);
 
-        // Only restore stock if the old invoice was NOT linked to a delivery challan
-        const wasLinkedToChallan = editingInvoice.linked_challan_ids && editingInvoice.linked_challan_ids.length > 0;
-
-        if (!wasLinkedToChallan) {
-          for (const oldItem of oldItems) {
-            if (oldItem.batch_id) {
-              // Fetch fresh batch data from database to avoid using stale state
-              const { data: freshBatch } = await supabase
-                .from('batches')
-                .select('current_stock')
-                .eq('id', oldItem.batch_id)
-                .single();
-
-              if (freshBatch) {
-                await supabase
-                  .from('batches')
-                  .update({ current_stock: freshBatch.current_stock + oldItem.quantity })
-                  .eq('id', oldItem.batch_id);
-              }
-            }
-          }
-        }
+        if (deleteItemsError) throw deleteItemsError;
 
         const { data: updatedInvoice, error: updateError } = await supabase
           .from('sales_invoices')
@@ -591,14 +551,6 @@ export function Sales() {
           .single();
 
         if (updateError) throw updateError;
-
-        const { error: deleteItemsError } = await supabase
-          .from('sales_invoice_items')
-          .delete()
-          .eq('invoice_id', editingInvoice.id);
-
-        if (deleteItemsError) throw deleteItemsError;
-
         invoice = updatedInvoice;
       } else {
         const { data: newInvoice, error: invoiceError } = await supabase
@@ -642,58 +594,7 @@ export function Sales() {
 
       if (itemsError) throw itemsError;
 
-      // Only deduct stock and create transactions if NOT linked to a delivery challan
-      // (Delivery challans already deduct stock when created)
-      // Note: isLinkedToChallan already defined above for pre-validation
-
-      if (!isLinkedToChallan) {
-        for (const item of items) {
-          if (item.batch_id) {
-            // Fetch fresh batch data from database to avoid using stale state
-            const { data: freshBatch, error: fetchError } = await supabase
-              .from('batches')
-              .select('current_stock, batch_number')
-              .eq('id', item.batch_id)
-              .single();
-
-            if (fetchError || !freshBatch) {
-              throw new Error(`Batch not found: ${item.batch_id}`);
-            }
-
-            const newStock = freshBatch.current_stock - item.quantity;
-
-            // Validate stock availability
-            if (newStock < 0) {
-              throw new Error(`Insufficient stock for batch ${freshBatch.batch_number}. Available: ${freshBatch.current_stock}, Required: ${item.quantity}`);
-            }
-
-            const { error: batchError } = await supabase
-              .from('batches')
-              .update({ current_stock: newStock })
-              .eq('id', item.batch_id);
-
-            if (batchError) throw batchError;
-          }
-
-          const { error: txError } = await supabase
-            .from('inventory_transactions')
-            .insert([{
-              transaction_type: 'sale',
-              product_id: item.product_id,
-              batch_id: item.batch_id || null,
-              quantity: item.quantity,
-              reference_number: formData.invoice_number,
-              notes: `Sales invoice ${formData.invoice_number}`,
-              transaction_date: formData.invoice_date,
-              created_by: user.id,
-            }]);
-
-          if (txError) {
-            console.error('Error creating inventory transaction:', txError);
-            throw txError;
-          }
-        }
-      }
+      // Stock deduction and inventory transactions are handled automatically by database trigger
 
       await loadInvoices();
       await loadBatches();
