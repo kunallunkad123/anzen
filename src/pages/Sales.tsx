@@ -518,6 +518,29 @@ export function Sales() {
         }
       }
 
+      // Pre-validate stock availability before saving anything
+      const isLinkedToChallan = selectedChallanId !== '';
+      if (!isLinkedToChallan) {
+        for (const item of items) {
+          if (item.batch_id) {
+            const { data: freshBatch, error: fetchError } = await supabase
+              .from('batches')
+              .select('current_stock, batch_number')
+              .eq('id', item.batch_id)
+              .single();
+
+            if (fetchError || !freshBatch) {
+              throw new Error(`Batch not found for validation`);
+            }
+
+            const newStock = freshBatch.current_stock - item.quantity;
+            if (newStock < 0) {
+              throw new Error(`Insufficient stock for batch "${freshBatch.batch_number}". Available: ${freshBatch.current_stock}, Required: ${item.quantity}`);
+            }
+          }
+        }
+      }
+
       let invoice;
 
       if (editingInvoice) {
@@ -529,11 +552,17 @@ export function Sales() {
         if (!wasLinkedToChallan) {
           for (const oldItem of oldItems) {
             if (oldItem.batch_id) {
-              const batch = batches.find(b => b.id === oldItem.batch_id);
-              if (batch) {
+              // Fetch fresh batch data from database to avoid using stale state
+              const { data: freshBatch } = await supabase
+                .from('batches')
+                .select('current_stock')
+                .eq('id', oldItem.batch_id)
+                .single();
+
+              if (freshBatch) {
                 await supabase
                   .from('batches')
-                  .update({ current_stock: batch.current_stock + oldItem.quantity })
+                  .update({ current_stock: freshBatch.current_stock + oldItem.quantity })
                   .eq('id', oldItem.batch_id);
               }
             }
@@ -615,27 +644,35 @@ export function Sales() {
 
       // Only deduct stock and create transactions if NOT linked to a delivery challan
       // (Delivery challans already deduct stock when created)
-      const isLinkedToChallan = selectedChallanId || (invoice.linked_challan_ids && invoice.linked_challan_ids.length > 0);
+      // Note: isLinkedToChallan already defined above for pre-validation
 
       if (!isLinkedToChallan) {
         for (const item of items) {
           if (item.batch_id) {
-            const batch = batches.find(b => b.id === item.batch_id);
-            if (batch) {
-              const newStock = batch.current_stock - item.quantity;
+            // Fetch fresh batch data from database to avoid using stale state
+            const { data: freshBatch, error: fetchError } = await supabase
+              .from('batches')
+              .select('current_stock, batch_number')
+              .eq('id', item.batch_id)
+              .single();
 
-              // Validate stock availability
-              if (newStock < 0) {
-                throw new Error(`Insufficient stock for batch. Available: ${batch.current_stock}, Required: ${item.quantity}`);
-              }
-
-              const { error: batchError } = await supabase
-                .from('batches')
-                .update({ current_stock: newStock })
-                .eq('id', item.batch_id);
-
-              if (batchError) throw batchError;
+            if (fetchError || !freshBatch) {
+              throw new Error(`Batch not found: ${item.batch_id}`);
             }
+
+            const newStock = freshBatch.current_stock - item.quantity;
+
+            // Validate stock availability
+            if (newStock < 0) {
+              throw new Error(`Insufficient stock for batch ${freshBatch.batch_number}. Available: ${freshBatch.current_stock}, Required: ${item.quantity}`);
+            }
+
+            const { error: batchError } = await supabase
+              .from('batches')
+              .update({ current_stock: newStock })
+              .eq('id', item.batch_id);
+
+            if (batchError) throw batchError;
           }
 
           const { error: txError } = await supabase
@@ -1039,55 +1076,50 @@ export function Sales() {
 
                   return (
                     <div key={index} className="p-3 bg-gray-50 rounded-lg space-y-2">
-                      <div className="grid grid-cols-6 gap-2 items-end">
-                        <div className="col-span-2">
-                          <label className="block text-xs text-gray-600 mb-1">Product</label>
+                      <div className="grid grid-cols-12 gap-2 items-end">
+                        <div className="col-span-3">
+                          <label className="block text-xs text-gray-600 mb-1">Product *</label>
                           <select
                             value={item.product_id}
                             onChange={(e) => updateItemTotal(index, { ...item, product_id: e.target.value, batch_id: null })}
                             className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                             required
                           >
-                            <option value="">Select</option>
+                            <option value="">Select Product</option>
                             {products.map((p) => (
                               <option key={p.id} value={p.id}>{p.product_name}</option>
                             ))}
                           </select>
                         </div>
 
-                        {item.product_id && (
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">Batch</label>
-                            <select
-                              value={item.batch_id || ''}
-                              onChange={(e) => {
-                                const batchId = e.target.value || null;
-                                const suggested = getSuggestedPrice(batchId);
-                                updateItemTotal(index, { ...item, batch_id: batchId, unit_price: suggested });
-                              }}
-                              className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                              disabled={selectedChallanId !== ''}
-                            >
-                              <option value="">Select</option>
-                              {/* Show only batches with stock > 0 for manual selection */}
-                              {availableBatches.filter(b => b.current_stock > 0).map((b) => (
-                                <option key={b.id} value={b.id}>{b.batch_number} ({b.current_stock} available)</option>
-                              ))}
-                              {/* Show selected batch even if stock is 0 (from delivery challan) */}
-                              {item.batch_id && availableBatches.find(b => b.id === item.batch_id && b.current_stock === 0) && (
-                                <option key={item.batch_id} value={item.batch_id}>
-                                  {availableBatches.find(b => b.id === item.batch_id)?.batch_number} (from challan)
-                                </option>
-                              )}
-                            </select>
-                            {selectedChallanId && (
-                              <p className="text-xs text-blue-600 mt-1">Batch from delivery challan (locked)</p>
+                        <div className="col-span-2">
+                          <label className="block text-xs text-gray-600 mb-1">Batch</label>
+                          <select
+                            value={item.batch_id || ''}
+                            onChange={(e) => {
+                              const batchId = e.target.value || null;
+                              const suggested = getSuggestedPrice(batchId);
+                              updateItemTotal(index, { ...item, batch_id: batchId, unit_price: suggested });
+                            }}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                            disabled={!item.product_id || selectedChallanId !== ''}
+                          >
+                            <option value="">Select Batch</option>
+                            {/* Show only batches with stock > 0 for manual selection */}
+                            {availableBatches.filter(b => b.current_stock > 0).map((b) => (
+                              <option key={b.id} value={b.id}>{b.batch_number} ({b.current_stock} stock)</option>
+                            ))}
+                            {/* Show selected batch even if stock is 0 (from delivery challan) */}
+                            {item.batch_id && availableBatches.find(b => b.id === item.batch_id && b.current_stock === 0) && (
+                              <option key={item.batch_id} value={item.batch_id}>
+                                {availableBatches.find(b => b.id === item.batch_id)?.batch_number} (from challan)
+                              </option>
                             )}
-                          </div>
-                        )}
+                          </select>
+                        </div>
 
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">Qty</label>
+                      <div className="col-span-2">
+                        <label className="block text-xs text-gray-600 mb-1">Quantity *</label>
                         <input
                           type="number"
                           value={item.quantity === 0 ? '' : item.quantity}
@@ -1099,8 +1131,8 @@ export function Sales() {
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">Price</label>
+                      <div className="col-span-2">
+                        <label className="block text-xs text-gray-600 mb-1">Unit Price *</label>
                         <input
                           type="number"
                           value={item.unit_price === 0 ? '' : item.unit_price}
@@ -1112,7 +1144,7 @@ export function Sales() {
                         />
                       </div>
 
-                      <div>
+                      <div className="col-span-1">
                         <label className="block text-xs text-gray-600 mb-1">Tax %</label>
                         <input
                           type="number"
@@ -1124,7 +1156,7 @@ export function Sales() {
                         />
                       </div>
 
-                      <div className="flex items-end gap-2">
+                      <div className="col-span-2 flex items-end gap-2">
                         <div className="flex-1">
                           <label className="block text-xs text-gray-600 mb-1">Total</label>
                           <input
@@ -1134,16 +1166,17 @@ export function Sales() {
                             disabled
                           />
                         </div>
-                          {items.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeItem(index)}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
+                        {items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                            title="Remove Item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                       </div>
 
                       {item.batch_id && costPerUnit > 0 && (
