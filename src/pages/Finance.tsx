@@ -5,8 +5,10 @@ import { Modal } from '../components/Modal';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Plus, Edit, Trash2, DollarSign, TrendingUp, TrendingDown, CreditCard, Receipt } from 'lucide-react';
+import { Plus, Edit, Trash2, DollarSign, TrendingUp, TrendingDown, CreditCard, Receipt, Paperclip } from 'lucide-react';
 import { BankAccountsManager } from '../components/finance/BankAccountsManager';
+import { ReceivablesManager } from '../components/finance/ReceivablesManager';
+import { FileUpload } from '../components/FileUpload';
 
 interface FinanceExpense {
   id: string;
@@ -15,6 +17,7 @@ interface FinanceExpense {
   expense_date: string;
   description: string | null;
   batch_id: string | null;
+  document_urls: string[] | null;
   created_at: string;
   batches?: {
     batch_number: string;
@@ -48,6 +51,7 @@ export function Finance() {
     expense_date: new Date().toISOString().split('T')[0],
     description: '',
     batch_id: '',
+    document_urls: [] as string[],
   });
 
   useEffect(() => {
@@ -101,6 +105,7 @@ export function Finance() {
             ...formData,
             batch_id: formData.batch_id || null,
             description: formData.description || null,
+            document_urls: formData.document_urls.length > 0 ? formData.document_urls : null,
           })
           .eq('id', editingExpense.id);
 
@@ -112,6 +117,7 @@ export function Finance() {
             ...formData,
             batch_id: formData.batch_id || null,
             description: formData.description || null,
+            document_urls: formData.document_urls.length > 0 ? formData.document_urls : null,
             created_by: user.id,
           }]);
 
@@ -135,6 +141,7 @@ export function Finance() {
       expense_date: expense.expense_date,
       description: expense.description || '',
       batch_id: expense.batch_id || '',
+      document_urls: expense.document_urls || [],
     });
     setModalOpen(true);
   };
@@ -164,6 +171,7 @@ export function Finance() {
       expense_date: new Date().toISOString().split('T')[0],
       description: '',
       batch_id: '',
+      document_urls: [],
     });
   };
 
@@ -476,6 +484,18 @@ export function Finance() {
                   placeholder="Additional details about this expense"
                 />
               </div>
+
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <Paperclip className="w-4 h-4 inline mr-1" />
+                  Attach Documents (Receipts, Photos, etc.)
+                </label>
+                <FileUpload
+                  currentUrls={formData.document_urls}
+                  onUploadComplete={(urls) => setFormData({ ...formData, document_urls: urls })}
+                  folder="expense-documents"
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4">
@@ -506,12 +526,7 @@ export function Finance() {
             )}
 
             {activeTab === 'receivables' && (
-              <div className="text-center py-12 text-gray-500">
-                <TrendingUp className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                <p className="text-lg font-medium">Accounts Receivable</p>
-                <p className="text-sm mt-2">Track customer payments against invoices</p>
-                <p className="text-xs mt-4 text-gray-400">Feature in development...</p>
-              </div>
+              <ReceivablesManager canManage={canManage} />
             )}
 
             {activeTab === 'payables' && (
