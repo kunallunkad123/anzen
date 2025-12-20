@@ -320,7 +320,7 @@ export function DeliveryChallan() {
       const { data, error } = await supabase
         .from('delivery_challan_items')
         .select('*, products(product_name, product_code, unit), batches(batch_number, expiry_date, packaging_details, current_stock)')
-        .eq('challan_id', challanId);
+        .eq('delivery_challan_id', challanId);
 
       if (error) throw error;
       return data || [];
@@ -614,7 +614,7 @@ export function DeliveryChallan() {
         const { error: deleteItemsError } = await supabase
           .from('delivery_challan_items')
           .delete()
-          .eq('challan_id', editingChallan.id);
+          .eq('delivery_challan_id', editingChallan.id);
 
         if (deleteItemsError) throw deleteItemsError;
 
@@ -683,7 +683,7 @@ export function DeliveryChallan() {
       }
 
       const challanItemsData = items.map(item => ({
-        challan_id: challanId,
+        delivery_challan_id: challanId,
         product_id: item.product_id,
         batch_id: item.batch_id,
         quantity: item.quantity,
