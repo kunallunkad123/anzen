@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { AlertTriangle, Plus, Search, CheckCircle, XCircle, Clock, Upload, Eye, Camera, FileText, Edit, Trash2 } from 'lucide-react';
 import { Modal } from '../components/Modal';
+import { StockRejectionView } from '../components/StockRejectionView';
 
 interface StockRejection {
   id: string;
@@ -769,6 +770,16 @@ export default function StockRejections() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {showDetailsModal && selectedRejection && (
+        <StockRejectionView
+          rejection={selectedRejection}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedRejection(null);
+          }}
+        />
       )}
     </div>
   );

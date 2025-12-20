@@ -296,7 +296,7 @@ export function CreditNotes() {
 
   const calculateTotals = () => {
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-    const tax_amount = 0;
+    const tax_amount = subtotal * 0.11;
     const total_amount = subtotal + tax_amount;
     return { subtotal, tax_amount, total_amount };
   };

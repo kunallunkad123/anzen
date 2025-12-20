@@ -256,6 +256,10 @@ export default function MaterialReturns() {
     }
 
     try {
+      const financialImpact = validItems.reduce((sum, item) =>
+        sum + (item.quantity_returned * item.unit_price), 0
+      );
+
       if (editMode && editingReturnId) {
         const { error: returnError } = await supabase
           .from('material_returns')
@@ -266,6 +270,7 @@ export default function MaterialReturns() {
             return_type: formData.return_type,
             return_reason: formData.return_reason,
             notes: formData.notes,
+            financial_impact: financialImpact,
           })
           .eq('id', editingReturnId)
           .eq('status', 'pending_approval');
@@ -308,6 +313,7 @@ export default function MaterialReturns() {
             return_type: formData.return_type,
             return_reason: formData.return_reason,
             notes: formData.notes,
+            financial_impact: financialImpact,
             status: 'pending_approval',
             created_by: user?.id,
           })
