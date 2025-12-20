@@ -72,6 +72,7 @@ interface Batch {
   batch_number: string;
   product_id: string;
   current_stock: number;
+  reserved_stock: number;
   expiry_date: string | null;
   packaging_details: string | null;
   import_date: string | null;
@@ -303,7 +304,7 @@ export function DeliveryChallan() {
     try {
       const { data, error } = await supabase
         .from('batches')
-        .select('id, batch_number, product_id, current_stock, expiry_date, packaging_details, import_date')
+        .select('id, batch_number, product_id, current_stock, reserved_stock, expiry_date, packaging_details, import_date')
         .eq('is_active', true)
         .gt('current_stock', 0)
         .order('import_date', { ascending: true });
@@ -377,7 +378,7 @@ export function DeliveryChallan() {
 
           if (soItems && soItems.length > 0) {
             const newItems = soItems.map(item => {
-              const productBatches = batches.filter(b => b.product_id === item.product_id && b.current_stock > 0);
+              const productBatches = batches.filter(b => b.product_id === item.product_id && (b.current_stock - (b.reserved_stock || 0)) > 0);
               const fifoBatch = productBatches.length > 0 ? productBatches[0] : null;
 
               if (!fifoBatch) {
@@ -534,6 +535,18 @@ export function DeliveryChallan() {
     if (emptyBatches.length > 0) {
       alert('Some items do not have a batch selected. Please select a batch for all items.');
       return;
+    }
+
+    for (const item of items) {
+      const batch = batches.find(b => b.id === item.batch_id);
+      if (batch) {
+        const availableStock = batch.current_stock - (batch.reserved_stock || 0);
+        if (item.quantity > availableStock) {
+          const product = products.find(p => p.id === item.product_id);
+          alert(`Insufficient available stock for ${product?.product_name || 'product'}.\nBatch: ${batch.batch_number}\nAvailable: ${availableStock} kg\nRequested: ${item.quantity} kg\n\nPlease reduce the quantity or select a different batch.`);
+          return;
+        }
+      }
     }
 
     try {
@@ -1171,7 +1184,7 @@ export function DeliveryChallan() {
 
               <div className="space-y-2">
                 {items.map((item, index) => {
-                  const availableBatches = batches.filter(b => b.product_id === item.product_id);
+                  const availableBatches = batches.filter(b => b.product_id === item.product_id && (b.current_stock - (b.reserved_stock || 0)) > 0);
                   const selectedBatch = batches.find(b => b.id === item.batch_id);
 
                   return (
