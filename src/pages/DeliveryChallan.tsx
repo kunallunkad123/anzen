@@ -598,12 +598,22 @@ export function DeliveryChallan() {
 
         if (updateError) throw updateError;
 
-        const { error: deleteItemsError } = await supabase
-          .from('delivery_challan_items')
-          .delete()
-          .eq('challan_id', editingChallan.id);
+        const itemsForRpc = items.map(item => ({
+          product_id: item.product_id,
+          batch_id: item.batch_id,
+          quantity: item.quantity,
+          pack_size: item.pack_size,
+          pack_type: item.pack_type,
+          number_of_packs: item.number_of_packs,
+        }));
 
-        if (deleteItemsError) throw deleteItemsError;
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('edit_delivery_challan', {
+          p_challan_id: editingChallan.id,
+          p_new_items: itemsForRpc
+        });
+
+        if (rpcError) throw rpcError;
+        if (!rpcResult?.success) throw new Error(rpcResult?.error || 'Failed to update DC items');
 
         challanId = updatedChallan.id;
       } else {
@@ -617,36 +627,25 @@ export function DeliveryChallan() {
         challanId = newChallan.id;
       }
 
-      const challanItemsData = items.map(item => ({
-        challan_id: challanId,
-        product_id: item.product_id,
-        batch_id: item.batch_id,
-        quantity: item.quantity,
-        pack_size: item.pack_size,
-        pack_type: item.pack_type,
-        number_of_packs: item.number_of_packs,
-      }));
+      if (!editingChallan) {
+        const challanItemsData = items.map(item => ({
+          challan_id: challanId,
+          product_id: item.product_id,
+          batch_id: item.batch_id,
+          quantity: item.quantity,
+          pack_size: item.pack_size,
+          pack_type: item.pack_type,
+          number_of_packs: item.number_of_packs,
+        }));
 
-      const { error: itemsError } = await supabase
-        .from('delivery_challan_items')
-        .insert(challanItemsData);
+        const { error: itemsError } = await supabase
+          .from('delivery_challan_items')
+          .insert(challanItemsData);
 
-      if (itemsError) {
-        if (!editingChallan) {
+        if (itemsError) {
           await supabase.from('delivery_challans').delete().eq('id', challanId);
-        } else {
-          const restoredItems = originalItems.map(item => ({
-            challan_id: challanId,
-            product_id: item.product_id,
-            batch_id: item.batch_id,
-            quantity: item.quantity,
-            pack_size: item.pack_size,
-            pack_type: item.pack_type,
-            number_of_packs: item.number_of_packs,
-          }));
-          await supabase.from('delivery_challan_items').insert(restoredItems);
+          throw itemsError;
         }
-        throw itemsError;
       }
 
       if (!editingChallan && formData.sales_order_id) {
