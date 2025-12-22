@@ -1280,37 +1280,31 @@ export function DeliveryChallan() {
                       </div>
 
                       {selectedBatch && (
-                        <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs space-y-1">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Batch:</span>
-                            <span className="font-medium">{selectedBatch.batch_number}</span>
-                          </div>
-                          {selectedBatch.expiry_date && (
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Expiry:</span>
-                              <span className="font-medium">{new Date(selectedBatch.expiry_date).toLocaleDateString()}</span>
-                            </div>
-                          )}
-                          {selectedBatch.packaging_details && (
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Packaging:</span>
-                              <span className="font-medium">{selectedBatch.packaging_details}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Total Stock:</span>
-                            <span className="font-medium">{selectedBatch.current_stock} kg</span>
-                          </div>
-                          {selectedBatch.reserved_stock > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Reserved:</span>
-                              <span className="font-medium text-orange-600">{selectedBatch.reserved_stock} kg</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between border-t pt-1">
-                            <span className="text-gray-600 font-semibold">Available:</span>
-                            <span className="font-bold text-green-600">{selectedBatch.current_stock - (selectedBatch.reserved_stock || 0)} kg</span>
-                          </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs border border-gray-300 rounded">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="px-2 py-1 text-left border-r border-gray-300">Batch</th>
+                                <th className="px-2 py-1 text-left border-r border-gray-300">Expiry</th>
+                                <th className="px-2 py-1 text-left border-r border-gray-300">Packaging</th>
+                                <th className="px-2 py-1 text-right border-r border-gray-300">Total</th>
+                                <th className="px-2 py-1 text-right font-semibold text-green-700">Available</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr className="bg-white">
+                                <td className="px-2 py-1 border-r border-gray-300">{selectedBatch.batch_number}</td>
+                                <td className="px-2 py-1 border-r border-gray-300">
+                                  {selectedBatch.expiry_date ? new Date(selectedBatch.expiry_date).toLocaleDateString() : '-'}
+                                </td>
+                                <td className="px-2 py-1 border-r border-gray-300">{selectedBatch.packaging_details || '-'}</td>
+                                <td className="px-2 py-1 text-right border-r border-gray-300">{selectedBatch.current_stock} kg</td>
+                                <td className="px-2 py-1 text-right font-bold text-green-600">
+                                  {selectedBatch.current_stock - (selectedBatch.reserved_stock || 0)} kg
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
                         </div>
                       )}
 
