@@ -552,7 +552,15 @@ export function DeliveryChallan() {
     for (const [batchId, totalQuantity] of batchUsage.entries()) {
       const batch = batches.find(b => b.id === batchId);
       if (batch) {
-        const availableStock = batch.current_stock - (batch.reserved_stock || 0);
+        let availableStock = batch.current_stock - (batch.reserved_stock || 0);
+
+        if (editingChallan) {
+          const originalQtyInThisBatch = originalItems
+            .filter(oi => oi.batch_id === batchId)
+            .reduce((sum, oi) => sum + oi.quantity, 0);
+          availableStock += originalQtyInThisBatch;
+        }
+
         if (totalQuantity > availableStock) {
           const product = products.find(p => p.id === items.find(i => i.batch_id === batchId)?.product_id);
           alert(`Insufficient available stock for batch ${batch.batch_number}!\n\nProduct: ${product?.product_name || 'Unknown'}\nBatch: ${batch.batch_number}\nAvailable: ${availableStock} kg\nTotal Requested (across all items): ${totalQuantity} kg\n\nYou are using this batch in multiple items. Please reduce quantities or select different batches.`);
