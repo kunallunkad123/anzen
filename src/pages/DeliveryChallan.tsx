@@ -575,52 +575,6 @@ export function DeliveryChallan() {
       let challanId: string;
 
       if (editingChallan) {
-        const stockAdjustments: { batch_id: string; adjustment: number }[] = [];
-
-        for (const originalItem of originalItems) {
-          stockAdjustments.push({
-            batch_id: originalItem.batch_id,
-            adjustment: originalItem.quantity,
-          });
-        }
-
-        for (const newItem of items) {
-          const existingAdjustment = stockAdjustments.find(adj => adj.batch_id === newItem.batch_id);
-          if (existingAdjustment) {
-            existingAdjustment.adjustment -= newItem.quantity;
-          } else {
-            stockAdjustments.push({
-              batch_id: newItem.batch_id,
-              adjustment: -newItem.quantity,
-            });
-          }
-        }
-
-        for (const adjustment of stockAdjustments) {
-          if (adjustment.adjustment !== 0) {
-            const { error: batchError } = await supabase.rpc('update_batch_stock', {
-              p_batch_id: adjustment.batch_id,
-              p_adjustment: adjustment.adjustment,
-            });
-
-            if (batchError) {
-              const { data: batchData } = await supabase
-                .from('batches')
-                .select('current_stock')
-                .eq('id', adjustment.batch_id)
-                .single();
-
-              if (batchData) {
-                const newStock = batchData.current_stock + adjustment.adjustment;
-                await supabase
-                  .from('batches')
-                  .update({ current_stock: newStock })
-                  .eq('id', adjustment.batch_id);
-              }
-            }
-          }
-        }
-
         const { data: updatedChallan, error: updateError } = await supabase
           .from('delivery_challans')
           .update(challanData)
@@ -666,8 +620,67 @@ export function DeliveryChallan() {
       if (itemsError) {
         if (!editingChallan) {
           await supabase.from('delivery_challans').delete().eq('id', challanId);
+        } else {
+          const restoredItems = originalItems.map(item => ({
+            challan_id: challanId,
+            product_id: item.product_id,
+            batch_id: item.batch_id,
+            quantity: item.quantity,
+            pack_size: item.pack_size,
+            pack_type: item.pack_type,
+            number_of_packs: item.number_of_packs,
+          }));
+          await supabase.from('delivery_challan_items').insert(restoredItems);
         }
         throw itemsError;
+      }
+
+      if (editingChallan) {
+        const stockAdjustments: { batch_id: string; adjustment: number }[] = [];
+
+        for (const originalItem of originalItems) {
+          stockAdjustments.push({
+            batch_id: originalItem.batch_id,
+            adjustment: originalItem.quantity,
+          });
+        }
+
+        for (const newItem of items) {
+          const existingAdjustment = stockAdjustments.find(adj => adj.batch_id === newItem.batch_id);
+          if (existingAdjustment) {
+            existingAdjustment.adjustment -= newItem.quantity;
+          } else {
+            stockAdjustments.push({
+              batch_id: newItem.batch_id,
+              adjustment: -newItem.quantity,
+            });
+          }
+        }
+
+        for (const adjustment of stockAdjustments) {
+          if (adjustment.adjustment !== 0) {
+            const { error: batchError } = await supabase.rpc('update_batch_stock', {
+              p_batch_id: adjustment.batch_id,
+              p_adjustment: adjustment.adjustment,
+            });
+
+            if (batchError) {
+              const { data: batchData } = await supabase
+                .from('batches')
+                .select('current_stock')
+                .eq('id', adjustment.batch_id)
+                .single();
+
+              if (batchData) {
+                const newStock = batchData.current_stock + adjustment.adjustment;
+                await supabase
+                  .from('batches')
+                  .update({ current_stock: newStock })
+                  .eq('id', adjustment.batch_id);
+              }
+            }
+          }
+        }
       }
 
       if (!editingChallan && formData.sales_order_id) {
