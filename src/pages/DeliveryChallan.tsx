@@ -641,69 +641,7 @@ export function DeliveryChallan() {
         throw itemsError;
       }
 
-      if (editingChallan) {
-        const stockAdjustments: { batch_id: string; adjustment: number }[] = [];
-
-        for (const originalItem of originalItems) {
-          stockAdjustments.push({
-            batch_id: originalItem.batch_id,
-            adjustment: originalItem.quantity,
-          });
-        }
-
-        for (const newItem of items) {
-          const existingAdjustment = stockAdjustments.find(adj => adj.batch_id === newItem.batch_id);
-          if (existingAdjustment) {
-            existingAdjustment.adjustment -= newItem.quantity;
-          } else {
-            stockAdjustments.push({
-              batch_id: newItem.batch_id,
-              adjustment: -newItem.quantity,
-            });
-          }
-        }
-
-        for (const adjustment of stockAdjustments) {
-          if (adjustment.adjustment !== 0) {
-            const { error: batchError } = await supabase.rpc('update_batch_stock', {
-              p_batch_id: adjustment.batch_id,
-              p_adjustment: adjustment.adjustment,
-            });
-
-            if (batchError) {
-              const { data: batchData } = await supabase
-                .from('batches')
-                .select('current_stock')
-                .eq('id', adjustment.batch_id)
-                .single();
-
-              if (batchData) {
-                const newStock = batchData.current_stock + adjustment.adjustment;
-                await supabase
-                  .from('batches')
-                  .update({ current_stock: newStock })
-                  .eq('id', adjustment.batch_id);
-              }
-            }
-          }
-        }
-      }
-
       if (!editingChallan && formData.sales_order_id) {
-        for (const item of items) {
-          const { error: releaseError } = await supabase.rpc('fn_deduct_stock_and_release_reservation', {
-            p_so_id: formData.sales_order_id,
-            p_batch_id: item.batch_id,
-            p_product_id: item.product_id,
-            p_quantity: item.quantity,
-            p_user_id: user.id
-          });
-
-          if (releaseError) {
-            console.error('Error releasing reservation:', releaseError);
-          }
-        }
-
         const { data: soItems } = await supabase
           .from('sales_order_items')
           .select('id, product_id, quantity, delivered_quantity')
