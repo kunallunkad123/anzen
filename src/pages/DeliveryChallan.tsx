@@ -543,13 +543,19 @@ export function DeliveryChallan() {
       return;
     }
 
+    const batchUsage = new Map<string, number>();
     for (const item of items) {
-      const batch = batches.find(b => b.id === item.batch_id);
+      const currentUsage = batchUsage.get(item.batch_id) || 0;
+      batchUsage.set(item.batch_id, currentUsage + item.quantity);
+    }
+
+    for (const [batchId, totalQuantity] of batchUsage.entries()) {
+      const batch = batches.find(b => b.id === batchId);
       if (batch) {
         const availableStock = batch.current_stock - (batch.reserved_stock || 0);
-        if (item.quantity > availableStock) {
-          const product = products.find(p => p.id === item.product_id);
-          alert(`Insufficient available stock for ${product?.product_name || 'product'}.\nBatch: ${batch.batch_number}\nAvailable: ${availableStock} kg\nRequested: ${item.quantity} kg\n\nPlease reduce the quantity or select a different batch.`);
+        if (totalQuantity > availableStock) {
+          const product = products.find(p => p.id === items.find(i => i.batch_id === batchId)?.product_id);
+          alert(`Insufficient available stock for batch ${batch.batch_number}!\n\nProduct: ${product?.product_name || 'Unknown'}\nBatch: ${batch.batch_number}\nAvailable: ${availableStock} kg\nTotal Requested (across all items): ${totalQuantity} kg\n\nYou are using this batch in multiple items. Please reduce quantities or select different batches.`);
           return;
         }
       }
@@ -1206,7 +1212,19 @@ export function DeliveryChallan() {
 
               <div className="space-y-2">
                 {items.map((item, index) => {
-                  const availableBatches = batches.filter(b => b.product_id === item.product_id && (b.current_stock - (b.reserved_stock || 0)) > 0);
+                  const batchUsageInForm = new Map<string, number>();
+                  items.forEach((formItem, formIndex) => {
+                    if (formIndex !== index && formItem.batch_id) {
+                      const currentUsage = batchUsageInForm.get(formItem.batch_id) || 0;
+                      batchUsageInForm.set(formItem.batch_id, currentUsage + formItem.quantity);
+                    }
+                  });
+
+                  const availableBatches = batches.filter(b => {
+                    const baseAvailable = b.current_stock - (b.reserved_stock || 0);
+                    const usedInOtherItems = batchUsageInForm.get(b.id) || 0;
+                    return b.product_id === item.product_id && (baseAvailable - usedInOtherItems) > 0;
+                  });
                   const selectedBatch = batches.find(b => b.id === item.batch_id);
 
                   return (
@@ -1264,10 +1282,12 @@ export function DeliveryChallan() {
                               <option value="">Select Batch</option>
                               {availableBatches.map((b, idx) => {
                                 const fifoIndicator = idx === 0 ? ' 🔄' : '';
-                                const availableStock = b.current_stock - (b.reserved_stock || 0);
+                                const baseAvailable = b.current_stock - (b.reserved_stock || 0);
+                                const usedInOtherItems = batchUsageInForm.get(b.id) || 0;
+                                const actualAvailable = baseAvailable - usedInOtherItems;
                                 return (
                                   <option key={b.id} value={b.id}>
-                                    {b.batch_number} (Avl: {availableStock}kg){fifoIndicator}
+                                    {b.batch_number} (Avl: {actualAvailable}kg){fifoIndicator}
                                   </option>
                                 );
                               })}
@@ -1302,7 +1322,11 @@ export function DeliveryChallan() {
                                 <td className="px-1 py-0.5 border-r border-gray-300">{selectedBatch.packaging_details || '-'}</td>
                                 <td className="px-1 py-0.5 text-right border-r border-gray-300">{selectedBatch.current_stock}kg</td>
                                 <td className="px-1 py-0.5 text-right font-bold text-green-600">
-                                  {selectedBatch.current_stock - (selectedBatch.reserved_stock || 0)}kg
+                                  {(() => {
+                                    const baseAvailable = selectedBatch.current_stock - (selectedBatch.reserved_stock || 0);
+                                    const usedInOtherItems = batchUsageInForm.get(selectedBatch.id) || 0;
+                                    return baseAvailable - usedInOtherItems;
+                                  })()}kg
                                 </td>
                               </tr>
                             </tbody>
