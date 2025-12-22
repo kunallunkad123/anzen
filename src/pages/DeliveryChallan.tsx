@@ -531,9 +531,15 @@ export function DeliveryChallan() {
       return;
     }
 
-    const emptyBatches = items.filter(item => item.batch_id === '');
+    const emptyBatches = items.filter(item => !item.batch_id || item.batch_id === '');
     if (emptyBatches.length > 0) {
       alert('Some items do not have a batch selected. Please select a batch for all items.');
+      return;
+    }
+
+    const emptyProducts = items.filter(item => !item.product_id || item.product_id === '');
+    if (emptyProducts.length > 0) {
+      alert('Some items do not have a product selected. Please select a product for all items.');
       return;
     }
 
@@ -641,58 +647,6 @@ export function DeliveryChallan() {
 
         if (challanError) throw challanError;
         challanId = newChallan.id;
-
-        for (const item of items) {
-          if (formData.sales_order_id) {
-            const { error: releaseError } = await supabase.rpc('fn_deduct_stock_and_release_reservation', {
-              p_so_id: formData.sales_order_id,
-              p_batch_id: item.batch_id,
-              p_product_id: item.product_id,
-              p_quantity: item.quantity,
-              p_user_id: user.id
-            });
-
-            if (releaseError) {
-              console.error('Error releasing reservation:', releaseError);
-            }
-          }
-        }
-
-        if (formData.sales_order_id) {
-          const { data: soItems } = await supabase
-            .from('sales_order_items')
-            .select('id, product_id, quantity, delivered_quantity')
-            .eq('sales_order_id', formData.sales_order_id);
-
-          if (soItems) {
-            let allDelivered = true;
-            for (const soItem of soItems) {
-              const dcItem = items.find(i => i.product_id === soItem.product_id);
-              const newDeliveredQty = (soItem.delivered_quantity || 0) + (dcItem?.quantity || 0);
-
-              await supabase
-                .from('sales_order_items')
-                .update({ delivered_quantity: newDeliveredQty })
-                .eq('id', soItem.id);
-
-              if (newDeliveredQty < soItem.quantity) {
-                allDelivered = false;
-              }
-            }
-
-            const newStatus = allDelivered ? 'delivered' : 'partially_delivered';
-            await supabase
-              .from('sales_orders')
-              .update({
-                status: newStatus,
-                is_archived: allDelivered,
-                archived_at: allDelivered ? new Date().toISOString() : null,
-                archived_by: allDelivered ? user.id : null,
-                archive_reason: allDelivered ? 'Delivery Challan created and all items delivered' : null
-              })
-              .eq('id', formData.sales_order_id);
-          }
-        }
       }
 
       const challanItemsData = items.map(item => ({
@@ -709,7 +663,62 @@ export function DeliveryChallan() {
         .from('delivery_challan_items')
         .insert(challanItemsData);
 
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        if (!editingChallan) {
+          await supabase.from('delivery_challans').delete().eq('id', challanId);
+        }
+        throw itemsError;
+      }
+
+      if (!editingChallan && formData.sales_order_id) {
+        for (const item of items) {
+          const { error: releaseError } = await supabase.rpc('fn_deduct_stock_and_release_reservation', {
+            p_so_id: formData.sales_order_id,
+            p_batch_id: item.batch_id,
+            p_product_id: item.product_id,
+            p_quantity: item.quantity,
+            p_user_id: user.id
+          });
+
+          if (releaseError) {
+            console.error('Error releasing reservation:', releaseError);
+          }
+        }
+
+        const { data: soItems } = await supabase
+          .from('sales_order_items')
+          .select('id, product_id, quantity, delivered_quantity')
+          .eq('sales_order_id', formData.sales_order_id);
+
+        if (soItems) {
+          let allDelivered = true;
+          for (const soItem of soItems) {
+            const dcItem = items.find(i => i.product_id === soItem.product_id);
+            const newDeliveredQty = (soItem.delivered_quantity || 0) + (dcItem?.quantity || 0);
+
+            await supabase
+              .from('sales_order_items')
+              .update({ delivered_quantity: newDeliveredQty })
+              .eq('id', soItem.id);
+
+            if (newDeliveredQty < soItem.quantity) {
+              allDelivered = false;
+            }
+          }
+
+          const newStatus = allDelivered ? 'delivered' : 'partially_delivered';
+          await supabase
+            .from('sales_orders')
+            .update({
+              status: newStatus,
+              is_archived: allDelivered,
+              archived_at: allDelivered ? new Date().toISOString() : null,
+              archived_by: allDelivered ? user.id : null,
+              archive_reason: allDelivered ? 'Delivery Challan created and all items delivered' : null
+            })
+            .eq('id', formData.sales_order_id);
+        }
+      }
 
       setModalOpen(false);
       resetForm();
