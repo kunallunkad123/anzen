@@ -1210,10 +1210,10 @@ export function DeliveryChallan() {
                   const selectedBatch = batches.find(b => b.id === item.batch_id);
 
                   return (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
+                    <div key={index} className="relative p-2 bg-gray-50 rounded border border-gray-200">
+                      <div className="grid grid-cols-2 gap-2 mb-2">
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">Product *</label>
+                          <label className="block text-xs text-gray-600 mb-0.5">Product *</label>
                           <select
                             value={item.product_id}
                             onChange={(e) => {
@@ -1221,7 +1221,7 @@ export function DeliveryChallan() {
                               newItems[index] = { ...newItems[index], product_id: e.target.value, batch_id: '' };
                               setItems(newItems);
                             }}
-                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                             required
                           >
                             <option value="">Select Product</option>
@@ -1231,76 +1231,78 @@ export function DeliveryChallan() {
                           </select>
                         </div>
 
-                        {item.product_id && (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <label className="block text-xs text-gray-600">Batch *</label>
-                              {availableBatches.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const fifoBatch = getFIFOBatch(item.product_id);
-                                    if (fifoBatch) {
-                                      handleBatchChange(index, fifoBatch.id);
-                                    }
-                                  }}
-                                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                                  title="Select oldest batch (FIFO)"
-                                >
-                                  Use FIFO
-                                </button>
-                              )}
-                            </div>
-                            {availableBatches.length > 0 ? (
-                              <select
-                                value={item.batch_id}
-                                onChange={(e) => handleBatchChange(index, e.target.value)}
-                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                                required
+                        <div>
+                          <div className="flex items-center justify-between mb-0.5">
+                            <label className="block text-xs text-gray-600">Batch *</label>
+                            {item.product_id && availableBatches.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const fifoBatch = getFIFOBatch(item.product_id);
+                                  if (fifoBatch) {
+                                    handleBatchChange(index, fifoBatch.id);
+                                  }
+                                }}
+                                className="text-[10px] text-blue-600 hover:text-blue-700 font-medium"
+                                title="Select oldest batch (FIFO)"
                               >
-                                <option value="">Select Batch</option>
-                                {availableBatches.map((b, idx) => {
-                                  const fifoIndicator = idx === 0 ? ' 🔄 FIFO' : '';
-                                  const availableStock = b.current_stock - (b.reserved_stock || 0);
-                                  return (
-                                    <option key={b.id} value={b.id}>
-                                      {b.batch_number} (Total: {b.current_stock}kg, Available: {availableStock}kg){fifoIndicator}
-                                    </option>
-                                  );
-                                })}
-                              </select>
-                            ) : (
-                              <div className="w-full px-2 py-1.5 text-sm border border-red-300 rounded bg-red-50 text-red-700 flex items-center gap-2">
-                                <span>⚠</span>
-                                <span>No batches available for this product</span>
-                              </div>
+                                Use FIFO
+                              </button>
                             )}
                           </div>
-                        )}
+                          {!item.product_id ? (
+                            <div className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-100 text-gray-400">
+                              Select product first
+                            </div>
+                          ) : availableBatches.length > 0 ? (
+                            <select
+                              value={item.batch_id}
+                              onChange={(e) => handleBatchChange(index, e.target.value)}
+                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                              required
+                            >
+                              <option value="">Select Batch</option>
+                              {availableBatches.map((b, idx) => {
+                                const fifoIndicator = idx === 0 ? ' 🔄' : '';
+                                const availableStock = b.current_stock - (b.reserved_stock || 0);
+                                return (
+                                  <option key={b.id} value={b.id}>
+                                    {b.batch_number} (Avl: {availableStock}kg){fifoIndicator}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          ) : (
+                            <div className="w-full px-2 py-1 text-xs border border-red-300 rounded bg-red-50 text-red-700 flex items-center gap-1">
+                              <span>⚠</span>
+                              <span>No stock available</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {selectedBatch && (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs border border-gray-300 rounded">
-                            <thead className="bg-gray-100">
+                        <div className="mb-2">
+                          <table className="w-full text-[10px] border border-gray-300">
+                            <thead className="bg-gray-200">
                               <tr>
-                                <th className="px-2 py-1 text-left border-r border-gray-300">Batch</th>
-                                <th className="px-2 py-1 text-left border-r border-gray-300">Expiry</th>
-                                <th className="px-2 py-1 text-left border-r border-gray-300">Packaging</th>
-                                <th className="px-2 py-1 text-right border-r border-gray-300">Total</th>
-                                <th className="px-2 py-1 text-right font-semibold text-green-700">Available</th>
+                                <th className="px-1 py-0.5 text-left border-r border-gray-300">Batch</th>
+                                <th className="px-1 py-0.5 text-left border-r border-gray-300">Expiry</th>
+                                <th className="px-1 py-0.5 text-left border-r border-gray-300">Packaging</th>
+                                <th className="px-1 py-0.5 text-right border-r border-gray-300">Total</th>
+                                <th className="px-1 py-0.5 text-right font-semibold">Available</th>
                               </tr>
                             </thead>
                             <tbody>
                               <tr className="bg-white">
-                                <td className="px-2 py-1 border-r border-gray-300">{selectedBatch.batch_number}</td>
-                                <td className="px-2 py-1 border-r border-gray-300">
-                                  {selectedBatch.expiry_date ? new Date(selectedBatch.expiry_date).toLocaleDateString() : '-'}
+                                <td className="px-1 py-0.5 border-r border-gray-300">{selectedBatch.batch_number}</td>
+                                <td className="px-1 py-0.5 border-r border-gray-300">
+                                  {selectedBatch.expiry_date ? new Date(selectedBatch.expiry_date).toLocaleDateString('en-GB', {day: '2-digit', month: '2-digit', year: '2-digit'}) : '-'}
                                 </td>
-                                <td className="px-2 py-1 border-r border-gray-300">{selectedBatch.packaging_details || '-'}</td>
-                                <td className="px-2 py-1 text-right border-r border-gray-300">{selectedBatch.current_stock} kg</td>
-                                <td className="px-2 py-1 text-right font-bold text-green-600">
-                                  {selectedBatch.current_stock - (selectedBatch.reserved_stock || 0)} kg
+                                <td className="px-1 py-0.5 border-r border-gray-300">{selectedBatch.packaging_details || '-'}</td>
+                                <td className="px-1 py-0.5 text-right border-r border-gray-300">{selectedBatch.current_stock}kg</td>
+                                <td className="px-1 py-0.5 text-right font-bold text-green-600">
+                                  {selectedBatch.current_stock - (selectedBatch.reserved_stock || 0)}kg
                                 </td>
                               </tr>
                             </tbody>
@@ -1311,31 +1313,31 @@ export function DeliveryChallan() {
                       {item.pack_size && (
                         <div className="grid grid-cols-3 gap-2">
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">No. of Packs *</label>
+                            <label className="block text-xs text-gray-600 mb-0.5">No. of Packs *</label>
                             <input
                               type="number"
                               value={item.number_of_packs || ''}
                               onChange={(e) => updatePackQuantity(index, Number(e.target.value))}
-                              className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                               required
                               min="1"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">Pack Size</label>
+                            <label className="block text-xs text-gray-600 mb-0.5">Pack Size</label>
                             <input
                               type="text"
                               value={`${item.pack_size} kg`}
-                              className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded bg-gray-100"
+                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-100"
                               disabled
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">Total Qty (Kg)</label>
+                            <label className="block text-xs text-gray-600 mb-0.5">Total Qty (Kg)</label>
                             <input
                               type="text"
                               value={`${item.quantity} kg`}
-                              className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded bg-gray-100"
+                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-100"
                               disabled
                             />
                           </div>
@@ -1343,15 +1345,13 @@ export function DeliveryChallan() {
                       )}
 
                       {items.length > 1 && (
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => removeItem(index)}
-                            className="text-xs text-red-600 hover:text-red-700"
-                          >
-                            Remove Item
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          className="absolute top-1 right-1 text-xs text-red-600 hover:text-red-800 bg-white px-2 py-0.5 rounded border border-red-300 shadow-sm"
+                        >
+                          Remove
+                        </button>
                       )}
                     </div>
                   );
