@@ -198,6 +198,7 @@ export function Batches() {
         product_id: formData.product_id,
         import_date: formData.import_date,
         import_quantity: formData.import_quantity,
+        current_stock: formData.import_quantity,
         packaging_details: formData.packaging_details,
         import_price: importPriceIDR,
         import_price_usd: formData.import_price_usd || null,
