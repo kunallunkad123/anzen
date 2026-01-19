@@ -20,6 +20,7 @@ interface StockRejectionViewProps {
     product: {
       product_name: string;
       product_code: string;
+      unit: string;
     };
     batch: {
       batch_number: string;
@@ -41,8 +42,9 @@ export function StockRejectionView({ rejection, onClose }: StockRejectionViewPro
   };
 
   const formatCurrency = (amount: number | undefined | null) => {
-    if (amount === undefined || amount === null) return 'Rp 0';
-    return `Rp ${amount.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    if (amount === undefined || amount === null) return 'Rp 0,00';
+    // Always show 2 decimal places in Indonesian format (Rp 136.125.000,00)
+    return `Rp ${amount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const handlePrint = () => {
@@ -190,7 +192,7 @@ export function StockRejectionView({ rejection, onClose }: StockRejectionViewPro
                   </div>
                   <div>
                     <span className="font-bold">Batch Stock:</span>
-                    <span className="ml-2">{rejection.batch.current_stock.toLocaleString()} Kg</span>
+                    <span className="ml-2">{rejection.batch.current_stock.toLocaleString()} {rejection.product.unit}</span>
                   </div>
                 </div>
 
@@ -205,7 +207,7 @@ export function StockRejectionView({ rejection, onClose }: StockRejectionViewPro
                   </div>
                   <div className="pt-1">
                     <span className="font-bold">Qty Rejected:</span>
-                    <span className="ml-2 text-red-600 font-semibold">{rejection.quantity_rejected.toLocaleString()} Kg</span>
+                    <span className="ml-2 text-red-600 font-semibold">{rejection.quantity_rejected.toLocaleString()} {rejection.product.unit}</span>
                   </div>
                   <div>
                     <span className="font-bold">Status:</span>
@@ -262,7 +264,7 @@ export function StockRejectionView({ rejection, onClose }: StockRejectionViewPro
                         </div>
                         <div className="flex justify-between">
                           <span>Quantity:</span>
-                          <span className="font-semibold">{rejection.quantity_rejected.toLocaleString()} Kg</span>
+                          <span className="font-semibold">{rejection.quantity_rejected.toLocaleString()} {rejection.product.unit}</span>
                         </div>
                         <div className="flex justify-between pt-1 border-t-2 border-black">
                           <span className="font-bold">Total Loss:</span>

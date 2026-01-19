@@ -34,6 +34,7 @@ interface BankAccount {
   id: string;
   account_name: string;
   bank_name: string;
+  alias: string | null;
 }
 
 export function ReceivablesManager({ canManage }: { canManage: boolean }) {
@@ -73,7 +74,7 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
           .limit(50),
         supabase
           .from('bank_accounts')
-          .select('id, account_name, bank_name')
+          .select('id, account_name, bank_name, alias')
           .eq('is_active', true)
           .order('account_name'),
       ]);
@@ -173,41 +174,62 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // 1. Insert payment record
-      const { data: payment, error: paymentError } = await supabase
-        .from('customer_payments')
+      // 1. Generate voucher number
+      const year = new Date().getFullYear().toString().slice(-2);
+      const month = (new Date().getMonth() + 1).toString().padStart(2, '0');
+      const { count } = await supabase
+        .from('receipt_vouchers')
+        .select('*', { count: 'exact', head: true })
+        .like('voucher_number', `RV${year}${month}%`);
+
+      const voucherNumber = `RV${year}${month}-${String((count || 0) + 1).padStart(4, '0')}`;
+
+      // 2. Insert receipt voucher
+      const { data: voucher, error: voucherError } = await supabase
+        .from('receipt_vouchers')
         .insert([{
-          payment_number: formData.payment_number,
+          voucher_number: voucherNumber,
+          voucher_date: formData.payment_date,
           customer_id: selectedInvoice.customer_id,
-          invoice_id: null,
-          payment_date: formData.payment_date,
-          amount: formData.amount,
           payment_method: formData.payment_method,
           bank_account_id: formData.bank_account_id || null,
           reference_number: formData.reference_number || null,
-          notes: formData.notes || null,
+          amount: formData.amount,
+          description: formData.notes || null,
           created_by: user.id,
         }])
         .select()
         .single();
 
-      if (paymentError) throw paymentError;
+      if (voucherError) throw voucherError;
 
-      // 2. Insert allocation records
-      const allocations = Object.entries(selectedAllocations)
-        .filter(([_, amount]) => amount > 0)
-        .map(([invoiceId, amount]) => ({
+      // 3. Insert invoice payment allocations and update payment status
+      for (const [invoiceId, amount] of Object.entries(selectedAllocations)) {
+        if (amount <= 0) continue;
+
+        // Create allocation in invoice_payment_allocations table
+        await supabase.from('invoice_payment_allocations').insert({
           invoice_id: invoiceId,
-          payment_id: payment.id,
+          payment_id: voucher.id,
           allocated_amount: amount,
           created_by: user.id,
-        }));
+        });
 
-      const { error: allocError } = await supabase
-        .from('invoice_payment_allocations')
-        .insert(allocations);
+        // Update invoice payment status based on total paid
+        const invoice = customerInvoices.find(inv => inv.id === invoiceId);
+        if (invoice) {
+          const newPaidAmount = (invoice.paid_amount || 0) + amount;
+          const newBalance = invoice.total_amount - newPaidAmount;
+          const newStatus = newBalance <= 0.01 ? 'paid' : (newPaidAmount > 0 ? 'partial' : 'pending');
 
-      if (allocError) throw allocError;
+          await supabase
+            .from('sales_invoices')
+            .update({
+              payment_status: newStatus,
+            })
+            .eq('id', invoiceId);
+        }
+      }
 
       setModalOpen(false);
       setSelectedInvoice(null);
@@ -215,7 +237,7 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
       setSelectedAllocations({});
       resetForm();
       loadData();
-      alert('Payment recorded and allocated successfully!');
+      alert(`Receipt voucher ${voucherNumber} created and allocated successfully!`);
     } catch (error: any) {
       console.error('Error recording payment:', error);
       alert(`Failed to record payment: ${error.message}`);
@@ -274,14 +296,14 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
     {
       key: 'total_amount',
       label: 'Amount',
-      render: (inv: SalesInvoice) => `Rp ${inv.total_amount.toLocaleString('id-ID')}`
+      render: (inv: SalesInvoice) => `Rp ${inv.total_amount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     },
     {
       key: 'paid',
       label: 'Paid',
       render: (inv: SalesInvoice) => (
         <span className="text-green-600">
-          Rp {(inv.paid_amount || 0).toLocaleString('id-ID')}
+          Rp {(inv.paid_amount || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       )
     },
@@ -290,7 +312,7 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
       label: 'Balance',
       render: (inv: SalesInvoice) => (
         <span className="font-semibold text-red-600">
-          Rp {(inv.total_amount - (inv.paid_amount || 0)).toLocaleString('id-ID')}
+          Rp {(inv.total_amount - (inv.paid_amount || 0)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       )
     },
@@ -333,7 +355,7 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
       label: 'Amount',
       render: (pay: CustomerPayment) => (
         <span className="font-semibold text-green-600">
-          Rp {pay.amount.toLocaleString('id-ID')}
+          Rp {pay.amount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       )
     },
@@ -521,7 +543,7 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
                   <option value="">Select Bank Account</option>
                   {bankAccounts.map((bank) => (
                     <option key={bank.id} value={bank.id}>
-                      {bank.account_name} - {bank.bank_name}
+                      {bank.alias || `${bank.account_name} - ${bank.bank_name}`}
                     </option>
                   ))}
                 </select>
@@ -585,8 +607,8 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
                         <div className="flex-1">
                           <div className="font-medium text-sm">{invoice.invoice_number}</div>
                           <div className="text-xs text-gray-600">Date: {new Date(invoice.invoice_date).toLocaleDateString()}</div>
-                          <div className="text-xs mt-1">Total: Rp {invoice.total_amount.toLocaleString('id-ID')}</div>
-                          <div className="text-xs text-orange-600 font-medium">Balance: Rp {balance.toLocaleString('id-ID')}</div>
+                          <div className="text-xs mt-1">Total: Rp {invoice.total_amount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="text-xs text-orange-600 font-medium">Balance: Rp {balance.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         </div>
                       </div>
                       {isSelected && (
@@ -622,18 +644,18 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
               <div className="border-t pt-3 space-y-1">
                 <div className="flex justify-between text-sm">
                   <span className="font-medium">Payment Amount:</span>
-                  <span className="font-bold">Rp {formData.amount.toLocaleString('id-ID')}</span>
+                  <span className="font-bold">Rp {formData.amount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Allocated:</span>
                   <span className={Object.values(selectedAllocations).reduce((a,b) => a+b, 0) > formData.amount ? 'text-red-600 font-bold' : 'text-green-600'}>
-                    Rp {Object.values(selectedAllocations).reduce((a,b) => a+b, 0).toLocaleString('id-ID')}
+                    Rp {Object.values(selectedAllocations).reduce((a,b) => a+b, 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Unallocated:</span>
                   <span className="text-gray-600">
-                    Rp {(formData.amount - Object.values(selectedAllocations).reduce((a,b) => a+b, 0)).toLocaleString('id-ID')}
+                    Rp {(formData.amount - Object.values(selectedAllocations).reduce((a,b) => a+b, 0)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>

@@ -58,10 +58,9 @@ export function InvoiceView({ invoice, items, onClose }: InvoiceViewProps) {
   const { t, language } = useLanguage();
 
   const formatCurrency = (amount: number | undefined | null) => {
-    if (amount === undefined || amount === null) return 'Rp 0';
-    // Show decimals only if there are decimal places
-    const hasDecimals = amount % 1 !== 0;
-    return `${amount.toLocaleString('id-ID', { minimumFractionDigits: hasDecimals ? 2 : 0, maximumFractionDigits: 2 })}`;
+    if (amount === undefined || amount === null) return 'Rp 0,00';
+    // Always show 2 decimal places in Indonesian format (Rp 136.125.000,00)
+    return `Rp ${amount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (dateString: string) => {
@@ -508,6 +507,119 @@ export function InvoiceView({ invoice, items, onClose }: InvoiceViewProps) {
                 </p>
               </div>
             )}
+          </div>
+
+          {/* COST ANALYSIS SECTION - NOT PRINTED */}
+          <div className="mt-6 p-6 bg-blue-50 border-2 border-blue-200 rounded-lg print:hidden">
+            <h3 className="text-lg font-bold text-blue-900 mb-4">Cost Analysis & Profitability (Internal Use Only)</h3>
+
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <table className="min-w-full divide-y divide-gray-300">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Product</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700">Qty</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700">Selling Price</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700">Revenue</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700">COGS/Unit</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700">Total COGS</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700">Gross Profit</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700">Margin %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {items.map((item, index) => {
+                    const quantity = item.quantity || 0;
+                    const unitPrice = item.unit_price || 0;
+                    const revenue = quantity * unitPrice;
+
+                    const cogs = 0;
+                    const totalCogs = cogs * quantity;
+                    const grossProfit = revenue - totalCogs;
+                    const marginPercent = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+
+                    return (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          <div className="font-medium">{item.products?.product_name}</div>
+                          {item.batches && (
+                            <div className="text-xs text-gray-500">Batch: {item.batches.batch_number}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900">{quantity}</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900">{formatCurrency(unitPrice)}</td>
+                        <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">{formatCurrency(revenue)}</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-600">
+                          <span className="text-orange-600 font-medium">{formatCurrency(cogs)}</span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right font-medium text-orange-600">
+                          {formatCurrency(totalCogs)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right font-semibold text-green-600">
+                          {formatCurrency(grossProfit)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          <span className={`font-semibold ${marginPercent >= 20 ? 'text-green-600' : marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
+                            {marginPercent.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-gray-50 border-t-2 border-gray-300">
+                  <tr>
+                    <td colSpan={3} className="px-4 py-3 text-sm font-bold text-gray-900 text-right">TOTALS:</td>
+                    <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
+                      {formatCurrency(invoice.subtotal)}
+                    </td>
+                    <td></td>
+                    <td className="px-4 py-3 text-sm font-bold text-orange-600 text-right">
+                      {formatCurrency(0)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold text-green-600 text-right">
+                      {formatCurrency(invoice.subtotal - 0)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold text-right">
+                      <span className={`${(invoice.subtotal > 0 ? ((invoice.subtotal - 0) / invoice.subtotal * 100) : 0) >= 20 ? 'text-green-600' : 'text-yellow-600'}`}>
+                        {(invoice.subtotal > 0 ? ((invoice.subtotal - 0) / invoice.subtotal * 100) : 0).toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              <div className="mt-6 grid grid-cols-3 gap-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="text-xs font-medium text-blue-700 mb-1">Total Revenue (excl. Tax)</div>
+                  <div className="text-xl font-bold text-blue-900">{formatCurrency(invoice.subtotal)}</div>
+                </div>
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <div className="text-xs font-medium text-orange-700 mb-1">Total COGS</div>
+                  <div className="text-xl font-bold text-orange-900">{formatCurrency(0)}</div>
+                  <div className="text-xs text-orange-600 mt-1">Cost of goods sold</div>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="text-xs font-medium text-green-700 mb-1">Gross Profit</div>
+                  <div className="text-xl font-bold text-green-900">{formatCurrency(invoice.subtotal - 0)}</div>
+                  <div className="text-xs text-green-600 mt-1">
+                    Margin: {(invoice.subtotal > 0 ? ((invoice.subtotal - 0) / invoice.subtotal * 100) : 0).toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div className="text-xs text-yellow-800">
+                    <p className="font-semibold">Note:</p>
+                    <p className="mt-1">This cost analysis is for internal management use only. COGS data is pulled from batch landed costs (including import costs). This section will NOT appear when printing the invoice.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

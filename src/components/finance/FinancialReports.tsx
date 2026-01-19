@@ -157,10 +157,10 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
                         {row.name_id && <div className="text-sm text-gray-500">{row.name_id}</div>}
                       </td>
                       <td className="px-4 py-2 text-right text-blue-600">
-                        {row.balance > 0 ? `Rp ${row.balance.toLocaleString('id-ID')}` : ''}
+                        {row.balance > 0 ? `Rp ${row.balance.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
                       </td>
                       <td className="px-4 py-2 text-right text-green-600">
-                        {row.balance < 0 ? `Rp ${Math.abs(row.balance).toLocaleString('id-ID')}` : ''}
+                        {row.balance < 0 ? `Rp ${Math.abs(row.balance).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
                       </td>
                     </tr>
                   ))}
@@ -175,8 +175,8 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
                 <tfoot className="bg-gray-100 font-bold">
                   <tr>
                     <td colSpan={2} className="px-4 py-3 text-right">Total:</td>
-                    <td className="px-4 py-3 text-right text-blue-700">Rp {totals.debit.toLocaleString('id-ID')}</td>
-                    <td className="px-4 py-3 text-right text-green-700">Rp {totals.credit.toLocaleString('id-ID')}</td>
+                    <td className="px-4 py-3 text-right text-blue-700">Rp {totals.debit.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-3 text-right text-green-700">Rp {totals.credit.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -190,6 +190,9 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
                 <p className="text-sm text-gray-500">
                   Period: {new Date(dateRange.start).toLocaleDateString('id-ID')} - {new Date(dateRange.end).toLocaleDateString('id-ID')}
                 </p>
+                <p className="text-xs text-amber-600 mt-1 italic">
+                  Note: Costs may change as import expenses are updated
+                </p>
               </div>
               
               <div className="p-4">
@@ -201,12 +204,12 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
                         <tr key={row.code}>
                           <td className="py-1 font-mono text-sm text-gray-500">{row.code}</td>
                           <td className="py-1">{row.name}</td>
-                          <td className="py-1 text-right text-green-600">Rp {Math.abs(row.balance).toLocaleString('id-ID')}</td>
+                          <td className="py-1 text-right text-green-600">Rp {Math.abs(row.balance).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                       ))}
                       <tr className="font-semibold border-t">
                         <td colSpan={2} className="py-2">Total Revenue</td>
-                        <td className="py-2 text-right text-green-700">Rp {revenue.toLocaleString('id-ID')}</td>
+                        <td className="py-2 text-right text-green-700">Rp {revenue.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -220,12 +223,12 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
                         <tr key={row.code}>
                           <td className="py-1 font-mono text-sm text-gray-500">{row.code}</td>
                           <td className="py-1">{row.name}</td>
-                          <td className="py-1 text-right text-red-600">Rp {Math.abs(row.balance).toLocaleString('id-ID')}</td>
+                          <td className="py-1 text-right text-red-600">Rp {Math.abs(row.balance).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                       ))}
                       <tr className="font-semibold border-t">
                         <td colSpan={2} className="py-2">Total Expenses</td>
-                        <td className="py-2 text-right text-red-700">Rp {expenses.toLocaleString('id-ID')}</td>
+                        <td className="py-2 text-right text-red-700">Rp {expenses.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -233,9 +236,9 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
 
                 <div className={`p-4 rounded-lg ${netIncome >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-lg">Net Income (Laba Bersih)</span>
+                    <span className="font-bold text-lg">Net Income <span className="text-sm font-normal italic">(Provisional)</span></span>
                     <span className={`font-bold text-2xl ${netIncome >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                      Rp {netIncome.toLocaleString('id-ID')}
+                      Rp {netIncome.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
@@ -261,7 +264,7 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
                             <span className="font-mono text-xs text-gray-500 mr-2">{row.code}</span>
                             {row.name}
                           </td>
-                          <td className="py-1 text-right text-blue-600">Rp {row.balance.toLocaleString('id-ID')}</td>
+                          <td className="py-1 text-right text-blue-600">Rp {row.balance.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                       ))}
                       {trialBalance.filter(r => r.account_type === 'contra' && r.account_group?.includes('Assets')).map(row => (
@@ -270,12 +273,12 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
                             <span className="font-mono text-xs mr-2">{row.code}</span>
                             {row.name}
                           </td>
-                          <td className="py-1 text-right">({Math.abs(row.balance).toLocaleString('id-ID')})</td>
+                          <td className="py-1 text-right">({Math.abs(row.balance).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</td>
                         </tr>
                       ))}
                       <tr className="font-semibold border-t-2">
                         <td className="py-2">Total Assets</td>
-                        <td className="py-2 text-right text-blue-700">Rp {(assets - contraAssets).toLocaleString('id-ID')}</td>
+                        <td className="py-2 text-right text-blue-700">Rp {(assets - contraAssets).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -291,12 +294,12 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
                             <span className="font-mono text-xs text-gray-500 mr-2">{row.code}</span>
                             {row.name}
                           </td>
-                          <td className="py-1 text-right text-red-600">Rp {Math.abs(row.balance).toLocaleString('id-ID')}</td>
+                          <td className="py-1 text-right text-red-600">Rp {Math.abs(row.balance).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                       ))}
                       <tr className="font-semibold border-t">
                         <td className="py-2">Total Liabilities</td>
-                        <td className="py-2 text-right text-red-700">Rp {liabilities.toLocaleString('id-ID')}</td>
+                        <td className="py-2 text-right text-red-700">Rp {liabilities.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -310,18 +313,18 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
                             <span className="font-mono text-xs text-gray-500 mr-2">{row.code}</span>
                             {row.name}
                           </td>
-                          <td className="py-1 text-right text-purple-600">Rp {Math.abs(row.balance).toLocaleString('id-ID')}</td>
+                          <td className="py-1 text-right text-purple-600">Rp {Math.abs(row.balance).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                       ))}
                       <tr>
                         <td className="py-1">Current Year Earnings</td>
                         <td className={`py-1 text-right ${netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          Rp {netIncome.toLocaleString('id-ID')}
+                          Rp {netIncome.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                       <tr className="font-semibold border-t">
                         <td className="py-2">Total Equity</td>
-                        <td className="py-2 text-right text-purple-700">Rp {(equity + netIncome).toLocaleString('id-ID')}</td>
+                        <td className="py-2 text-right text-purple-700">Rp {(equity + netIncome).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -329,7 +332,7 @@ export function FinancialReports({ initialReport = 'trial_balance' }: FinancialR
                   <div className="mt-4 p-3 bg-gray-100 rounded-lg">
                     <div className="flex justify-between font-bold">
                       <span>Total Liabilities + Equity</span>
-                      <span>Rp {(liabilities + equity + netIncome).toLocaleString('id-ID')}</span>
+                      <span>Rp {(liabilities + equity + netIncome).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 </div>
