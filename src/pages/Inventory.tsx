@@ -236,35 +236,39 @@ export function Inventory() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { error: txError } = await supabase
-        .from('inventory_transactions')
-        .insert([{
-          ...formData,
-          batch_id: formData.batch_id || null,
-          reference_number: formData.reference_number || null,
-          notes: formData.notes || null,
-          created_by: user.id,
-        }]);
-
-      if (txError) throw txError;
-
+      // HARDENING FIX #2: Use atomic DB-side stock adjustment
+      // Prevents race conditions in concurrent updates
       if (formData.batch_id) {
-        const batch = batches.find(b => b.id === formData.batch_id);
-        if (batch) {
-          let newStock = batch.current_stock;
-          if (formData.transaction_type === 'purchase' || formData.transaction_type === 'adjustment') {
-            newStock += formData.quantity;
-          } else if (formData.transaction_type === 'sale') {
-            newStock -= formData.quantity;
-          }
-
-          const { error: batchError } = await supabase
-            .from('batches')
-            .update({ current_stock: newStock })
-            .eq('id', formData.batch_id);
-
-          if (batchError) throw batchError;
+        let quantityChange = formData.quantity;
+        if (formData.transaction_type === 'sale') {
+          quantityChange = -quantityChange;
         }
+        // For 'purchase' and 'adjustment', quantity is already positive
+
+        const { error: adjustError } = await supabase
+          .rpc('adjust_batch_stock_atomic', {
+            p_batch_id: formData.batch_id,
+            p_quantity_change: quantityChange,
+            p_transaction_type: formData.transaction_type,
+            p_reference_id: null,
+            p_notes: formData.notes || null,
+            p_created_by: user.id,
+          });
+
+        if (adjustError) throw adjustError;
+      } else {
+        // No batch selected - just create transaction record
+        const { error: txError } = await supabase
+          .from('inventory_transactions')
+          .insert([{
+            ...formData,
+            batch_id: null,
+            reference_number: formData.reference_number || null,
+            notes: formData.notes || null,
+            created_by: user.id,
+          }]);
+
+        if (txError) throw txError;
       }
 
       setModalOpen(false);

@@ -4,11 +4,11 @@ import { Modal } from '../components/Modal';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { 
-  Plus, DollarSign, TrendingUp, TrendingDown, 
-  CreditCard, Receipt, BookOpen, Building2, 
+import {
+  Plus, DollarSign, TrendingUp, TrendingDown,
+  CreditCard, Receipt, BookOpen, Building2,
   ArrowDownCircle, ArrowUpCircle, Wallet, FileText, BarChart3,
-  ChevronRight, Landmark
+  ChevronRight, Landmark, Users, AlertCircle, ArrowRightLeft
 } from 'lucide-react';
 import { BankAccountsManager } from '../components/finance/BankAccountsManager';
 import { ReceivablesManager } from '../components/finance/ReceivablesManager';
@@ -21,9 +21,15 @@ import { PurchaseInvoiceManager } from '../components/finance/PurchaseInvoiceMan
 import { ReceiptVoucherManager } from '../components/finance/ReceiptVoucherManager';
 import { PaymentVoucherManager } from '../components/finance/PaymentVoucherManager';
 import { PettyCashManager } from '../components/finance/PettyCashManager';
-import { JournalEntryViewer } from '../components/finance/JournalEntryViewer';
+import { JournalEntryViewerEnhanced as JournalEntryViewer } from '../components/finance/JournalEntryViewerEnhanced';
 import { FinancialReports } from '../components/finance/FinancialReports';
-import { BankReconciliation } from '../components/finance/BankReconciliation';
+import { BankReconciliationEnhanced as BankReconciliation } from '../components/finance/BankReconciliationEnhanced';
+import { ExpenseManager } from '../components/finance/ExpenseManager';
+import { TaxReports } from '../components/finance/TaxReports';
+import BankLedger from '../components/finance/BankLedger';
+import PartyLedger from '../components/finance/PartyLedger';
+import OutstandingSummary from '../components/finance/OutstandingSummary';
+import { FundTransferManager } from '../components/finance/FundTransferManager';
 
 interface FinanceExpense {
   id: string;
@@ -43,10 +49,10 @@ interface Batch {
 }
 
 type FinanceSection = 'record' | 'track' | 'reports' | 'masters';
-type FinanceTab = 
-  | 'purchase_invoices' | 'receipts' | 'payments' | 'petty_cash' | 'journal'
-  | 'receivables' | 'payables' | 'reconciliation' | 'ageing'
-  | 'trial_balance' | 'pnl' | 'balance_sheet'
+type FinanceTab =
+  | 'purchase_invoices' | 'receipts' | 'payments' | 'expenses' | 'petty_cash' | 'fund_transfers' | 'journal'
+  | 'party_ledger' | 'outstanding' | 'receivables' | 'payables' | 'bank_ledger' | 'reconciliation' | 'ageing'
+  | 'trial_balance' | 'pnl' | 'balance_sheet' | 'tax_reports'
   | 'coa' | 'suppliers' | 'banks' | 'tax_codes';
 
 const sectionConfig = {
@@ -59,7 +65,9 @@ const sectionConfig = {
       { id: 'purchase_invoices', label: 'Purchase Invoice', icon: Receipt, desc: 'Record supplier invoices' },
       { id: 'receipts', label: 'Receipt Voucher', icon: ArrowDownCircle, desc: 'Record customer payments' },
       { id: 'payments', label: 'Payment Voucher', icon: ArrowUpCircle, desc: 'Record supplier payments' },
+      { id: 'expenses', label: 'Expenses', icon: DollarSign, desc: 'Import costs, delivery, admin expenses' },
       { id: 'petty_cash', label: 'Petty Cash', icon: Wallet, desc: 'Small daily expenses' },
+      { id: 'fund_transfers', label: 'Fund Transfers', icon: ArrowRightLeft, desc: 'Transfer between accounts' },
       { id: 'journal', label: 'Journal Entry', icon: FileText, desc: 'Manual journal entries' },
     ]
   },
@@ -69,8 +77,11 @@ const sectionConfig = {
     color: 'green',
     description: 'Monitor balances & status',
     tabs: [
+      { id: 'party_ledger', label: 'Party Ledger', icon: Users, desc: 'Customer/Supplier account book' },
+      { id: 'outstanding', label: 'Outstanding Summary', icon: AlertCircle, desc: 'Aging & follow-up report' },
       { id: 'receivables', label: 'Receivables', icon: TrendingUp, desc: 'Customer outstanding' },
       { id: 'payables', label: 'Payables', icon: TrendingDown, desc: 'Supplier outstanding' },
+      { id: 'bank_ledger', label: 'Bank Ledger', icon: BookOpen, desc: 'Bank book / passbook view' },
       { id: 'reconciliation', label: 'Bank Reconciliation', icon: Landmark, desc: 'Match bank statements' },
       { id: 'ageing', label: 'Ageing Report', icon: BarChart3, desc: 'Overdue analysis' },
     ]
@@ -84,6 +95,7 @@ const sectionConfig = {
       { id: 'trial_balance', label: 'Trial Balance', icon: FileText, desc: 'Account balances' },
       { id: 'pnl', label: 'Profit & Loss', icon: TrendingUp, desc: 'Income statement' },
       { id: 'balance_sheet', label: 'Balance Sheet', icon: FileText, desc: 'Financial position' },
+      { id: 'tax_reports', label: 'Tax Reports (PPN)', icon: Receipt, desc: 'Input/Output PPN for filing' },
     ]
   },
   masters: {
@@ -102,8 +114,25 @@ const sectionConfig = {
 export function Finance() {
   const { t } = useLanguage();
   const { profile } = useAuth();
-  const [activeSection, setActiveSection] = useState<FinanceSection>('record');
-  const [activeTab, setActiveTab] = useState<FinanceTab>('purchase_invoices');
+
+  // Parse URL hash to get section and tab
+  const getFromHash = () => {
+    const hash = window.location.hash.slice(1); // Remove #
+    const parts = hash.split('/');
+    if (parts.length === 2 && parts[0] === 'finance') {
+      // Find which section contains this tab
+      for (const [section, config] of Object.entries(sectionConfig)) {
+        if (config.tabs.some(tab => tab.id === parts[1])) {
+          return { section: section as FinanceSection, tab: parts[1] as FinanceTab };
+        }
+      }
+    }
+    return { section: 'record' as FinanceSection, tab: 'purchase_invoices' as FinanceTab };
+  };
+
+  const initial = getFromHash();
+  const [activeSection, setActiveSection] = useState<FinanceSection>(initial.section);
+  const [activeTab, setActiveTab] = useState<FinanceTab>(initial.tab);
   const [expenses, setExpenses] = useState<FinanceExpense[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +149,11 @@ export function Finance() {
   });
 
   const canManage = profile?.role === 'admin' || profile?.role === 'accounts';
+
+  // Update hash when tab changes
+  useEffect(() => {
+    window.location.hash = `finance/${activeTab}`;
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab === 'petty_cash') {
@@ -266,14 +300,24 @@ export function Finance() {
         return <ReceiptVoucherManager canManage={canManage} />;
       case 'payments':
         return <PaymentVoucherManager canManage={canManage} />;
+      case 'expenses':
+        return <ExpenseManager canManage={canManage} />;
       case 'petty_cash':
-        return <PettyCashManager canManage={canManage} />;
+        return <PettyCashManager canManage={canManage} onNavigateToFundTransfer={() => setActiveTab('fund_transfers')} />;
+      case 'fund_transfers':
+        return <FundTransferManager canManage={canManage} />;
       case 'journal':
         return <JournalEntryViewer canManage={canManage} />;
+      case 'party_ledger':
+        return <PartyLedger />;
+      case 'outstanding':
+        return <OutstandingSummary />;
       case 'receivables':
         return <ReceivablesManager canManage={canManage} />;
       case 'payables':
         return <PayablesManager canManage={canManage} />;
+      case 'bank_ledger':
+        return <BankLedger />;
       case 'reconciliation':
         return <BankReconciliation canManage={canManage} />;
       case 'ageing':
@@ -282,6 +326,8 @@ export function Finance() {
       case 'pnl':
       case 'balance_sheet':
         return <FinancialReports initialReport={activeTab} />;
+      case 'tax_reports':
+        return <TaxReports />;
       case 'coa':
         return <ChartOfAccountsManager canManage={canManage} />;
       case 'suppliers':
@@ -336,12 +382,16 @@ export function Finance() {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
                 return (
-                  <button
+                  <a
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id as FinanceTab)}
+                    href={`#finance/${tab.id}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setActiveTab(tab.id as FinanceTab);
+                    }}
                     className={`w-full text-left px-3 py-2.5 flex items-center gap-2 transition-all border-l-3 ${
-                      isActive 
-                        ? 'bg-blue-50 border-l-blue-600 text-blue-700' 
+                      isActive
+                        ? 'bg-blue-50 border-l-blue-600 text-blue-700'
                         : 'border-l-transparent hover:bg-gray-50 text-gray-700'
                     } ${idx !== 0 ? 'border-t border-gray-100' : ''}`}
                   >
@@ -350,7 +400,7 @@ export function Finance() {
                       <div className="text-sm font-medium truncate">{tab.label}</div>
                     </div>
                     {isActive && <ChevronRight className="w-4 h-4 text-blue-400" />}
-                  </button>
+                  </a>
                 );
               })}
             </div>
