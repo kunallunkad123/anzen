@@ -840,18 +840,28 @@ export function Sales() {
       if (editingInvoice) {
         // HARDENING FIX #1: Use atomic RPC to prevent race conditions
         // All operations (delete + update + insert) happen in single transaction
-        const validItems = items
+
+        // Deduplicate items before sending (in case of UI state issues)
+        const itemsMap = new Map();
+        items
           .filter(item => item.product_id && item.product_id.trim() !== '')
-          .map(item => ({
-            product_id: item.product_id,
-            batch_id: item.batch_id,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            tax_rate: item.tax_rate,
-            total_amount: item.total,
-            delivery_challan_item_id: item.delivery_challan_item_id || null,
-            max_quantity: item.max_quantity || null,
-          }));
+          .forEach(item => {
+            const key = `${item.product_id}-${item.batch_id}-${item.delivery_challan_item_id || 'manual'}`;
+            if (!itemsMap.has(key)) {
+              itemsMap.set(key, {
+                product_id: item.product_id,
+                batch_id: item.batch_id,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                tax_rate: item.tax_rate,
+                total_amount: item.total,
+                delivery_challan_item_id: item.delivery_challan_item_id || null,
+                max_quantity: item.max_quantity || null,
+              });
+            }
+          });
+
+        const validItems = Array.from(itemsMap.values());
 
         const { data: invoiceId, error: rpcError } = await supabase
           .rpc('update_sales_invoice_atomic', {
