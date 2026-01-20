@@ -17,17 +17,17 @@ interface SalesInvoice {
   paid_amount?: number;
 }
 
-interface CustomerPayment {
+interface ReceiptVoucher {
   id: string;
-  payment_number: string;
-  payment_date: string;
+  voucher_number: string;
+  voucher_date: string;
   amount: number;
   payment_method: string;
   reference_number: string | null;
-  notes: string | null;
+  description: string | null;
   customers: { company_name: string } | null;
-  sales_invoices: { invoice_number: string } | null;
-  bank_accounts: { account_name: string } | null;
+  bank_accounts: { account_name: string; alias: string | null } | null;
+  allocations?: { allocated_amount: number; sales_invoices: { invoice_number: string } | null }[];
 }
 
 interface BankAccount {
@@ -41,7 +41,7 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
   const { setCurrentPage } = useNavigation();
   const [view, setView] = useState<'invoices' | 'payments'>('invoices');
   const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
-  const [payments, setPayments] = useState<CustomerPayment[]>([]);
+  const [payments, setPayments] = useState<ReceiptVoucher[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,9 +68,13 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
           .in('payment_status', ['pending', 'partial'])
           .order('due_date', { ascending: true }),
         supabase
-          .from('customer_payments')
-          .select('*, customers(company_name), sales_invoices(invoice_number), bank_accounts(account_name)')
-          .order('payment_date', { ascending: false })
+          .from('receipt_vouchers')
+          .select(`
+            *,
+            customers(company_name),
+            bank_accounts(account_name, alias)
+          `)
+          .order('voucher_date', { ascending: false })
           .limit(50),
         supabase
           .from('bank_accounts')
@@ -83,15 +87,19 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
       if (paymentsRes.error) throw paymentsRes.error;
       if (banksRes.error) throw banksRes.error;
 
-      const invoicesWithPaid = await Promise.all((invoicesRes.data || []).map(async (inv) => {
-        const { data: paidData } = await supabase
-          .rpc('get_invoice_paid_amount', { p_invoice_id: inv.id });
-        const paidAmount = paidData || 0;
-        return { ...inv, paid_amount: paidAmount };
+      // Get allocations for each receipt voucher
+      const paymentsWithAllocations = await Promise.all((paymentsRes.data || []).map(async (voucher) => {
+        const { data: allocations } = await supabase
+          .from('voucher_allocations')
+          .select('allocated_amount, sales_invoices(invoice_number)')
+          .eq('receipt_voucher_id', voucher.id)
+          .eq('voucher_type', 'receipt');
+
+        return { ...voucher, allocations: allocations || [] };
       }));
 
-      setInvoices(invoicesWithPaid);
-      setPayments(paymentsRes.data || []);
+      setInvoices(invoicesRes.data || []);
+      setPayments(paymentsWithAllocations);
       setBankAccounts(banksRes.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -133,15 +141,8 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
 
       if (error) throw error;
 
-      // Calculate paid amounts
-      const invoicesWithBalance = await Promise.all((custInvoices || []).map(async (inv) => {
-        const { data: paidData } = await supabase
-          .rpc('get_invoice_paid_amount', { p_invoice_id: inv.id });
-        const paidAmount = paidData || 0;
-        return { ...inv, paid_amount: paidAmount };
-      }));
-
-      setCustomerInvoices(invoicesWithBalance);
+      // Invoices already have paid_amount and balance_amount from database
+      setCustomerInvoices(custInvoices || []);
 
       // Pre-select the clicked invoice
       setSelectedAllocations({
@@ -203,32 +204,20 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
 
       if (voucherError) throw voucherError;
 
-      // 3. Insert invoice payment allocations and update payment status
+      // 3. Insert invoice payment allocations using voucher_allocations table
       for (const [invoiceId, amount] of Object.entries(selectedAllocations)) {
         if (amount <= 0) continue;
 
-        // Create allocation in invoice_payment_allocations table
-        await supabase.from('invoice_payment_allocations').insert({
-          invoice_id: invoiceId,
-          payment_id: voucher.id,
+        // Create allocation in voucher_allocations table (this will trigger auto-update of invoice)
+        await supabase.from('voucher_allocations').insert({
+          voucher_type: 'receipt',
+          receipt_voucher_id: voucher.id,
+          sales_invoice_id: invoiceId,
           allocated_amount: amount,
-          created_by: user.id,
         });
 
-        // Update invoice payment status based on total paid
-        const invoice = customerInvoices.find(inv => inv.id === invoiceId);
-        if (invoice) {
-          const newPaidAmount = (invoice.paid_amount || 0) + amount;
-          const newBalance = invoice.total_amount - newPaidAmount;
-          const newStatus = newBalance <= 0.01 ? 'paid' : (newPaidAmount > 0 ? 'partial' : 'pending');
-
-          await supabase
-            .from('sales_invoices')
-            .update({
-              payment_status: newStatus,
-            })
-            .eq('id', invoiceId);
-        }
+        // Note: Invoice payment status is automatically updated by database trigger
+        // No need to manually update payment_status, paid_amount, or balance_amount
       }
 
       setModalOpen(false);
@@ -331,29 +320,32 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
 
   const paymentColumns = [
     {
-      key: 'payment_number',
-      label: 'Payment #',
-      render: (pay: CustomerPayment) => pay.payment_number
+      key: 'voucher_number',
+      label: 'Voucher #',
+      render: (pay: ReceiptVoucher) => pay.voucher_number
     },
     {
-      key: 'payment_date',
+      key: 'voucher_date',
       label: 'Date',
-      render: (pay: CustomerPayment) => new Date(pay.payment_date).toLocaleDateString()
+      render: (pay: ReceiptVoucher) => new Date(pay.voucher_date).toLocaleDateString()
     },
     {
       key: 'customer',
       label: 'Customer',
-      render: (pay: CustomerPayment) => pay.customers?.company_name || 'N/A'
+      render: (pay: ReceiptVoucher) => pay.customers?.company_name || 'N/A'
     },
     {
-      key: 'invoice',
-      label: 'Invoice',
-      render: (pay: CustomerPayment) => pay.sales_invoices?.invoice_number || 'N/A'
+      key: 'invoices',
+      label: 'Invoices',
+      render: (pay: ReceiptVoucher) => {
+        if (!pay.allocations || pay.allocations.length === 0) return 'Unallocated';
+        return pay.allocations.map(a => a.sales_invoices?.invoice_number || 'N/A').join(', ');
+      }
     },
     {
       key: 'amount',
       label: 'Amount',
-      render: (pay: CustomerPayment) => (
+      render: (pay: ReceiptVoucher) => (
         <span className="font-semibold text-green-600">
           Rp {pay.amount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
@@ -362,14 +354,19 @@ export function ReceivablesManager({ canManage }: { canManage: boolean }) {
     {
       key: 'method',
       label: 'Method',
-      render: (pay: CustomerPayment) => (
+      render: (pay: ReceiptVoucher) => (
         <span className="capitalize">{pay.payment_method.replace('_', ' ')}</span>
       )
     },
     {
       key: 'bank',
       label: 'Bank Account',
-      render: (pay: CustomerPayment) => pay.bank_accounts?.account_name || 'Cash'
+      render: (pay: ReceiptVoucher) => {
+        if (pay.bank_accounts) {
+          return pay.bank_accounts.alias || pay.bank_accounts.account_name;
+        }
+        return 'Cash';
+      }
     },
   ];
 
