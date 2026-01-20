@@ -334,7 +334,7 @@ export function BankReconciliationEnhanced({ canManage }: BankReconciliationEnha
 
   const loadExpenses = async () => {
     try {
-      // First, get all expenses
+      // First, get all expenses (removed limit to show all expenses)
       const { data: allExpenses, error } = await supabase
         .from('finance_expenses')
         .select(`
@@ -345,8 +345,7 @@ export function BankReconciliationEnhanced({ canManage }: BankReconciliationEnha
           expense_category,
           voucher_number
         `)
-        .order('expense_date', { ascending: false })
-        .limit(200);
+        .order('expense_date', { ascending: false });
 
       if (error) throw error;
 
@@ -614,27 +613,77 @@ export function BankReconciliationEnhanced({ canManage }: BankReconciliationEnha
             created_by: user?.id,
           }));
 
+          // Check for potential duplicates first
+          const { data: existingLines } = await supabase
+            .from('bank_statement_lines')
+            .select('transaction_date, description, debit_amount, credit_amount, running_balance')
+            .eq('bank_account_id', selectedBank);
+
+          // Find duplicates by matching date, amounts, and description
+          const duplicates = insertData.filter(newLine =>
+            existingLines?.some(existing =>
+              existing.transaction_date === newLine.transaction_date &&
+              existing.description === newLine.description &&
+              existing.debit_amount === newLine.debit_amount &&
+              existing.credit_amount === newLine.credit_amount &&
+              existing.running_balance === newLine.running_balance
+            )
+          );
+
+          let finalInsertData = insertData;
+
+          if (duplicates.length > 0) {
+            // Show duplicates to user
+            let dupMessage = `⚠️ Found ${duplicates.length} potential duplicate transaction(s):\n\n`;
+            duplicates.slice(0, 5).forEach((dup, idx) => {
+              const date = new Date(dup.transaction_date).toLocaleDateString('en-GB');
+              const amt = dup.debit_amount || dup.credit_amount;
+              dupMessage += `${idx + 1}. ${date} - ${dup.description.substring(0, 40)} - Rp ${amt.toLocaleString()}\n`;
+            });
+            if (duplicates.length > 5) {
+              dupMessage += `... and ${duplicates.length - 5} more\n`;
+            }
+            dupMessage += `\nDo you want to ADD them anyway?\n(Click OK to add, Cancel to skip duplicates)`;
+
+            const userWantsToAdd = confirm(dupMessage);
+
+            if (!userWantsToAdd) {
+              // Filter out duplicates
+              finalInsertData = insertData.filter(newLine =>
+                !existingLines?.some(existing =>
+                  existing.transaction_date === newLine.transaction_date &&
+                  existing.description === newLine.description &&
+                  existing.debit_amount === newLine.debit_amount &&
+                  existing.credit_amount === newLine.credit_amount &&
+                  existing.running_balance === newLine.running_balance
+                )
+              );
+            }
+          }
+
+          if (finalInsertData.length === 0) {
+            alert('ℹ️ No new transactions to import (all were duplicates and skipped)');
+            return;
+          }
+
           const { data: inserted, error: insertError } = await supabase
             .from('bank_statement_lines')
-            .upsert(insertData, {
-              onConflict: 'transaction_hash',
-              ignoreDuplicates: true
-            })
+            .insert(finalInsertData)
             .select();
 
           if (insertError) {
-            console.error('Upsert error:', insertError);
+            console.error('Insert error:', insertError);
             throw insertError;
           }
 
           const insertedCount = inserted?.length || 0;
-          const duplicateCount = insertData.length - insertedCount;
+          const skippedCount = insertData.length - finalInsertData.length;
 
           let message = `✅ CSV Import complete!\n`;
           message += `   Total processed: ${insertData.length} transaction(s)\n`;
-          message += `   New transactions: ${insertedCount}\n`;
-          if (duplicateCount > 0) {
-            message += `   Already in database: ${duplicateCount}`;
+          message += `   New transactions added: ${insertedCount}\n`;
+          if (skippedCount > 0) {
+            message += `   Duplicates skipped: ${skippedCount}`;
           }
           alert(message);
 
@@ -870,27 +919,77 @@ export function BankReconciliationEnhanced({ canManage }: BankReconciliationEnha
             created_by: user?.id,
           }));
 
+          // Check for potential duplicates first
+          const { data: existingLines } = await supabase
+            .from('bank_statement_lines')
+            .select('transaction_date, description, debit_amount, credit_amount, running_balance')
+            .eq('bank_account_id', selectedBank);
+
+          // Find duplicates by matching date, amounts, and description
+          const duplicates = insertData.filter(newLine =>
+            existingLines?.some(existing =>
+              existing.transaction_date === newLine.transaction_date &&
+              existing.description === newLine.description &&
+              existing.debit_amount === newLine.debit_amount &&
+              existing.credit_amount === newLine.credit_amount &&
+              existing.running_balance === newLine.running_balance
+            )
+          );
+
+          let finalInsertData = insertData;
+
+          if (duplicates.length > 0) {
+            // Show duplicates to user
+            let dupMessage = `⚠️ Found ${duplicates.length} potential duplicate transaction(s):\n\n`;
+            duplicates.slice(0, 5).forEach((dup, idx) => {
+              const date = new Date(dup.transaction_date).toLocaleDateString('en-GB');
+              const amt = dup.debit_amount || dup.credit_amount;
+              dupMessage += `${idx + 1}. ${date} - ${dup.description.substring(0, 40)} - Rp ${amt.toLocaleString()}\n`;
+            });
+            if (duplicates.length > 5) {
+              dupMessage += `... and ${duplicates.length - 5} more\n`;
+            }
+            dupMessage += `\nDo you want to ADD them anyway?\n(Click OK to add, Cancel to skip duplicates)`;
+
+            const userWantsToAdd = confirm(dupMessage);
+
+            if (!userWantsToAdd) {
+              // Filter out duplicates
+              finalInsertData = insertData.filter(newLine =>
+                !existingLines?.some(existing =>
+                  existing.transaction_date === newLine.transaction_date &&
+                  existing.description === newLine.description &&
+                  existing.debit_amount === newLine.debit_amount &&
+                  existing.credit_amount === newLine.credit_amount &&
+                  existing.running_balance === newLine.running_balance
+                )
+              );
+            }
+          }
+
+          if (finalInsertData.length === 0) {
+            alert('ℹ️ No new transactions to import (all were duplicates and skipped)');
+            return;
+          }
+
           const { data: inserted, error: insertError } = await supabase
             .from('bank_statement_lines')
-            .upsert(insertData, {
-              onConflict: 'transaction_hash',
-              ignoreDuplicates: true
-            })
+            .insert(finalInsertData)
             .select();
 
           if (insertError) {
-            console.error('Upsert error:', insertError);
+            console.error('Insert error:', insertError);
             throw insertError;
           }
 
           const insertedCount = inserted?.length || 0;
-          const duplicateCount = insertData.length - insertedCount;
+          const skippedCount = insertData.length - finalInsertData.length;
 
-          let message = `✅ CSV Import complete!\n`;
+          let message = `✅ Excel Import complete!\n`;
           message += `   Total processed: ${insertData.length} transaction(s)\n`;
-          message += `   New transactions: ${insertedCount}\n`;
-          if (duplicateCount > 0) {
-            message += `   Already in database: ${duplicateCount}`;
+          message += `   New transactions added: ${insertedCount}\n`;
+          if (skippedCount > 0) {
+            message += `   Duplicates skipped: ${skippedCount}`;
           }
           alert(message);
 
